@@ -2,13 +2,17 @@ Config                            = {}
 Config.Locale                     = 'en'
 
 Config.DrawDistance               = 20.0 -- How close you need to be in order for the markers to be drawn (in GTA units).
-Config.MaxInService               = -1
+Config.MaxInService               = 100
 Config.EnablePlayerManagement     = true -- Enable society managing.
 Config.EnableSocietyOwnedVehicles = false
 
 Config.NPCSpawnDistance           = 500.0
 Config.NPCNextToDistance          = 25.0
 Config.NPCJobEarnings             = { min = 15, max = 40 }
+
+
+Config.ImpundPrice = 100
+
 
 Config.Vehicles = {
 	'adder',
