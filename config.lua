@@ -14,13 +14,13 @@ Config.MarkerColor                = {r = 50, g = 50, b = 204}
 Config.Zones = {
 	Blip = {
 		Coords  = vector3(-368.2418,-130.7473, 38.66516),
-		Sprite  = 446,
+		Sprite  = 488,
 		Display = 4,
 		Scale   = 0.3,
 		Colour  = 24,
 		name = 'Mechanic'
 	},
-	
+	CustomCarLocation = {x = -320.2418, y = -131.4593, z = 38.96851},
 	Cloakroom = vector3(-320.2418, -131.4593, 38.96851),
 	ItemInventory = vector3(-344.7033, -125.0242, 39.0022),
 	CarSpawn = vector3(-360.1187, -122.5055, 38.68201),
