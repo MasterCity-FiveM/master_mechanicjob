@@ -82,4 +82,14 @@ Locales['en'] = {
   ['have_withdrawn']            = 'شما x%s %s برداشت کردید.',
   ['have_deposited']            = 'شما x%s %s گزاشتید.',
   ['player_cannot_hold']        = 'جیب های شما پر است.',
+  
+  ['service_max'] = 'you cannot enter service, max officers in service: %s/%s',
+  ['service_not'] = 'شما در حال انجام وظیفه نیستید، لطفا ابتدا لباس کار به تن کنید.',
+  ['service_anonunce'] = 'Etelaiye',
+  ['service_in'] = 'خوش آمدید، امیدواریم روز کاری خوبی داشته باشید.',
+  ['service_in_announce'] = 'Shahrvand ~y~%s~s~ be list afrade dar hale anjame vazife ezafe shod.',
+  ['service_out'] = 'از خدمات شما سپاسگذاریم، شما دیگر در حال انجام وظیفه نیستید.',
+  ['service_out_announce'] = 'Shahrvand ~y~%s~s~ az List afrade dar hale anjame vazife kharej shod.',
+  
+  ['open_cloackroom'] = 'دکمه E را فشار دهید تا لباس های خود را عوض کنید.',
 }

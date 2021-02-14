@@ -17,11 +17,13 @@ client_scripts {
 	'locales/pl.lua',
 	'locales/nl.lua',
 	'config.lua',
+	'custom_cars.lua',
 	'client/main.lua'
 }
 
 server_scripts {
 	'@es_extended/locale.lua',
+	'@mysql-async/lib/MySQL.lua',
 	'locales/en.lua',
 	'locales/es.lua',
 	'locales/fi.lua',
@@ -31,6 +33,7 @@ server_scripts {
 	'locales/pl.lua',
 	'locales/nl.lua',
 	'config.lua',
+	'custom_cars.lua',
 	'server/main.lua'
 }
 

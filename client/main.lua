@@ -1,9 +1,10 @@
-local HasAlreadyEnteredMarker, LastZone = false, nil
+local HasAlreadyEnteredMarker = false
 local CurrentAction, CurrentActionMsg, CurrentActionData = nil, '', {}
-local CurrentlyTowedVehicle, Blips, NPCOnJob, NPCTargetTowable, NPCTargetTowableZone = nil, {}, false, nil, nil
-local NPCHasSpawnedTowable, NPCLastCancel, NPCHasBeenNextToTowable, NPCTargetDeleterZone = false, GetGameTimer() - 5 * 60000, false, false
 local isDead, isBusy = false, false
 ESX = nil
+isInShopMenu = false
+local isInMarker, hasExited, letSleep = false, false, true
+local currentStation, currentPart, currentPartNum
 
 Citizen.CreateThread(function()
 	while ESX == nil do
@@ -18,40 +19,102 @@ Citizen.CreateThread(function()
 	ESX.PlayerData = ESX.GetPlayerData()
 end)
 
-RegisterNetEvent('master_keymap:e')
-AddEventHandler('master_keymap:e', function() 
-	if CurrentAction then
-		if IsControlJustReleased(0, 38) and ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
+-- Create blips
+Citizen.CreateThread(function()
+	local blip = AddBlipForCoord(Config.Zones.Blip.Coords)
 
-			if CurrentAction == 'mechanic_actions_menu' then
-				OpenMechanicActionsMenu()
-			elseif CurrentAction == 'mechanic_harvest_menu' then
-				OpenMechanicHarvestMenu()
-			elseif CurrentAction == 'mechanic_craft_menu' then
-				OpenMechanicCraftMenu()
-			elseif CurrentAction == 'delete_vehicle' then
+	SetBlipSprite (blip, Config.Zones.Blip.Sprite)
+	SetBlipDisplay(blip, Config.Zones.Blip.Display)
+	SetBlipScale(blip, 1.2)
+	SetBlipColour (blip, Config.Zones.Blip.Colour)
+	SetBlipAsShortRange(blip, true)
 
-				if Config.EnableSocietyOwnedVehicles then
-					local vehicleProps = ESX.Game.GetVehicleProperties(CurrentActionData.vehicle)
-					TriggerServerEvent('esx_society:putVehicleInGarage', 'mechanic', vehicleProps)
-				else
-					if
-						GetEntityModel(vehicle) == GetHashKey('flatbed')   or
-						GetEntityModel(vehicle) == GetHashKey('towtruck2') or
-						GetEntityModel(vehicle) == GetHashKey('slamvan3')
-					then
-						TriggerServerEvent('esx_service:disableService', 'mechanic')
-					end
+	BeginTextCommandSetBlipName('STRING')
+	AddTextComponentSubstringPlayerName(Config.Zones.Blip.name)
+	EndTextCommandSetBlipName(blip)
+end)
+
+Citizen.CreateThread(function()
+	while true do
+		Citizen.Wait(0)
+
+		if ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
+			
+			isInMarker, hasExited, letSleep = false, false, true
+			currentPart = nil
+			local playerPed = PlayerPedId()
+			local playerCoords = GetEntityCoords(playerPed)
+
+			local distance = #(playerCoords - Config.Zones.Cloakroom)
+
+			if distance < Config.DrawDistance then
+				DrawMarker(20, Config.Zones.Cloakroom, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
+				letSleep = false
+
+				if distance < Config.MarkerSize.x then
+					isInMarker, currentPart = true, 'Cloakroom'
 				end
+			end
+			
+			distance = #(playerCoords - Config.Zones.ItemInventory)
 
-				ESX.Game.DeleteVehicle(CurrentActionData.vehicle)
+			if distance < Config.DrawDistance then
+				DrawMarker(20, Config.Zones.ItemInventory, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
+				letSleep = false
 
-			elseif CurrentAction == 'remove_entity' then
-				DeleteEntity(CurrentActionData.entity)
+				if distance < Config.MarkerSize.x then
+					isInMarker, currentPart = true, 'ItemInventory'
+				end
 			end
 
-			CurrentAction = nil
+			distance = #(playerCoords - Config.Zones.CarSpawn)
+
+			if distance < Config.DrawDistance then
+				DrawMarker(36, Config.Zones.CarSpawn, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
+				letSleep = false
+
+				if distance < Config.MarkerSize.x then
+					isInMarker, currentPart = true, 'CarSpawn'
+				end
+			end
+
+			if isInMarker and not HasAlreadyEnteredMarker or (isInMarker and LastPart ~= currentPart) then
+				if LastPart and LastPart ~= currentPart then
+					TriggerEvent('master_mechanicjob:hasExitedMarker', currentPart)
+					hasExited = true
+				end
+				
+				HasAlreadyEnteredMarker = true
+				LastPart                = currentPart
+				TriggerEvent('master_mechanicjob:hasEnteredMarker', currentPart)
+			end
+
+			if not hasExited and not isInMarker and HasAlreadyEnteredMarker then
+				HasAlreadyEnteredMarker = false
+				TriggerEvent('master_mechanicjob:hasExitedMarker', LastPart)
+			end
+
+			if letSleep then
+				Citizen.Wait(2000)
+			end
+		else
+			Citizen.Wait(10000)
 		end
+	end
+end)
+
+RegisterNetEvent('master_keymap:e')
+AddEventHandler('master_keymap:e', function() 
+	if CurrentAction and  ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
+		if CurrentAction == 'menu_cloakroom' then
+			OpenCloakroomMenu()
+		elseif CurrentAction == 'menu_items' then
+			OpenGetStocksMenu()
+		elseif CurrentAction == 'menu_cars' then
+			OpenVehicleSpawnerMenu()
+		end
+
+		CurrentAction = nil
 	end
 end)
 
@@ -73,7 +136,8 @@ function OpenMobileMechanicActionsMenu()
 			{label = _U('repair'),        value = 'fix_vehicle'},
 			{label = _U('clean'),         value = 'clean_vehicle'},
 			{label = _U('imp_veh'),       value = 'del_vehicle'},
-			{label = _U('place_objects'), value = 'object_spawner'}
+			{label = 'شخصی سازی خودرو',       value = 'custom_vehicle'},
+			--{label = _U('place_objects'), value = 'object_spawner'}
 	}}, function(data, menu)
 		if isBusy then return end
 
@@ -112,6 +176,8 @@ function OpenMobileMechanicActionsMenu()
 				ESX.TriggerServerCallback('master_mechanicjob:repair_car', function(success)
 					if success then
 						RepairCar(vehicle, nil)
+					else
+						isBusy = false
 					end
 				end)				
 			else
@@ -123,7 +189,7 @@ function OpenMobileMechanicActionsMenu()
 			local coords    = GetEntityCoords(playerPed)
 
 			if IsPedSittingInAnyVehicle(playerPed) then
-				exports.pNotify:SendNotification({text = _U('inside_vehicle'), type = "success", timeout = 3000})
+				exports.pNotify:SendNotification({text = _U('inside_vehicle'), type = "error", timeout = 3000})
 				return
 			end
 
@@ -146,13 +212,8 @@ function OpenMobileMechanicActionsMenu()
 			local playerPed = PlayerPedId()
 
 			if IsPedSittingInAnyVehicle(playerPed) then
-				local vehicle = GetVehiclePedIsIn(playerPed, false)
-
-				if GetPedInVehicleSeat(vehicle, -1) == playerPed then
-					TriggerServerEvent('master_mechanicjob:impound_carstart', vehicle)
-				else
-					exports.pNotify:SendNotification({text = _U('must_seat_driver'), type = "error", timeout = 3000})
-				end
+				exports.pNotify:SendNotification({text = _U('inside_vehicle'), type = "error", timeout = 3000})
+				return
 			else
 				local vehicle = ESX.Game.GetVehicleInDirection()
 
@@ -162,7 +223,7 @@ function OpenMobileMechanicActionsMenu()
 					exports.pNotify:SendNotification({text = _U('must_near'), type = "error", timeout = 3000})
 				end
 			end
-		elseif data.current.value == 'object_spawner' then
+		--[[elseif data.current.value == 'object_spawner' then
 			local playerPed = PlayerPedId()
 
 			if IsPedSittingInAnyVehicle(playerPed) then
@@ -194,7 +255,9 @@ function OpenMobileMechanicActionsMenu()
 				end)
 			end, function(data2, menu2)
 				menu2.close()
-			end)
+			end)]]--
+		elseif data.current.value == 'custom_vehicle' then
+		
 		end
 	end, function(data, menu)
 		menu.close()
@@ -304,6 +367,241 @@ function RepairCar(vehicle, carJackObj)
 	end
 end
 
+function cleanPlayer(playerPed)
+	SetPedArmour(playerPed, 0)
+	ClearPedBloodDamage(playerPed)
+	ResetPedVisibleDamage(playerPed)
+	ClearPedLastWeaponDamage(playerPed)
+	ResetPedMovementClipset(playerPed, 0)
+end
+
+function setUniform(uniform, playerPed)
+	TriggerEvent('skinchanger:getSkin', function(skin)
+		local uniformObject
+		local uniform = uniform
+		
+		if skin.sex == 0 then
+			uniformObject = Config.Uniforms[ESX.PlayerData.job.name][uniform].male
+		else
+			uniformObject = Config.Uniforms[ESX.PlayerData.job.name][uniform].female
+		end
+
+		if uniformObject then
+			TriggerEvent('skinchanger:loadClothes', skin, uniformObject)
+		else
+			exports.pNotify:SendNotification({text = 'لباس موجود نیست!', type = "info", timeout = 3000})
+		end
+	end)
+end
+
+function setCustomUniform(uniform, playerPed)
+	TriggerEvent('skinchanger:getSkin', function(skin)
+		local uniformObject
+
+		if skin.sex == 0 then
+			uniformObject = uniform.male
+		else
+			uniformObject = uniform.female
+		end
+		
+		if uniformObject then
+			TriggerEvent('skinchanger:loadClothes', skin, uniformObject)
+		else
+			exports.pNotify:SendNotification({text = 'لباس موجود نیست!', type = "info", timeout = 3000})
+		end
+	end)
+end
+
+function OpenCloakroomMenu()
+	local playerPed = PlayerPedId()
+	local grade = ESX.PlayerData.job.grade_name
+
+	local elements = {
+		{label = 'لباس شهروندی', value = 'citizen_wear'}
+	}
+	
+	if Config.CustomUniforms[grade] ~= nil then
+		for k,v in ipairs(Config.CustomUniforms[grade]) do
+			table.insert(elements, {label = v.label, value = 'custom_players', model = v.model})
+		end
+	end
+	
+	if ESX.PlayerData.job.job_sub ~= nil and Config.SubJobUniforms[ESX.PlayerData.job.job_sub] ~= nil then
+		for k,v in ipairs(Config.SubJobUniforms[ESX.PlayerData.job.job_sub]) do
+			table.insert(elements, {label = v.label, value = 'custom_players', model = v.model})
+		end
+	end
+
+	ESX.UI.Menu.CloseAll()
+
+	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'cloakroom', {
+		title    = 'لباس',
+		align    = 'right',
+		elements = elements
+	}, function(data, menu)
+		cleanPlayer(playerPed)
+
+		if data.current.value == 'citizen_wear' then
+			menu.close()
+			ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin, jobSkin)
+				local model = nil
+				
+				if skin.sex == 0 then
+            		model = GetHashKey("mp_m_freemode_01")
+          		else
+            		model = GetHashKey("mp_f_freemode_01")
+          		end
+
+          		RequestModel(model)
+          		while not HasModelLoaded(model) do
+            	RequestModel(model)
+            		Citizen.Wait(1)
+          		end
+
+          		SetPlayerModel(PlayerId(), model)
+          		SetModelAsNoLongerNeeded(model)
+
+          		TriggerEvent('skinchanger:loadSkin', skin)
+				  TriggerEvent('esx:restoreLoadout')
+			end)
+		
+			if Config.EnableESXService then
+				ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+					if isInService and ESX.PlayerData.job.name ~= 'fbi' then
+						playerInService = false
+
+						local notification = {
+							title    = _U('service_anonunce'),
+							subject  = '',
+							msg      = _U('service_out_announce', GetPlayerName(PlayerId())),
+							iconType = 1
+						}
+
+						TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
+
+						TriggerServerEvent('esx_service:disableService', ESX.PlayerData.job.name)
+						TriggerEvent('master_mechanicjob:updateBlip')
+						exports.pNotify:SendNotification({text = _U('service_out'), type = "info", timeout = 3000})
+					end
+				end, ESX.PlayerData.job.name)
+			end
+		end
+
+		if Config.EnableESXService and data.current.value ~= 'citizen_wear' then
+			local awaitService
+
+			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+				if not isInService then
+
+					ESX.TriggerServerCallback('esx_service:enableService', function(canTakeService, maxInService, inServiceCount)
+						if not canTakeService then
+							ESX.ShowNotification(_U('service_max', inServiceCount, maxInService))
+						else
+							awaitService = true
+							playerInService = true
+
+							local notification = {
+								title    = _U('service_anonunce'),
+								subject  = '',
+								msg      = _U('service_in_announce', GetPlayerName(PlayerId())),
+								iconType = 1
+							}
+
+							TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
+							TriggerEvent('master_mechanicjob:updateBlip')
+							exports.pNotify:SendNotification({text = _U('service_in'), type = "info", timeout = 3000})
+						end
+					end, ESX.PlayerData.job.name)
+
+				else
+					awaitService = true
+				end
+			end, ESX.PlayerData.job.name)
+
+			while awaitService == nil do
+				Citizen.Wait(5)
+			end
+
+			-- if we couldn't enter service don't let the player get changed
+			if not awaitService then
+				return
+			end
+		end
+
+		if data.current.value == 'custom_players' then
+			setCustomUniform(data.current.model, playerPed)
+			return
+		end
+		
+		if data.current.uniform then
+			setUniform(data.current.uniform, playerPed)
+		end
+		
+	end, function(data, menu)
+		menu.close()
+
+		CurrentAction     = 'menu_cloakroom'
+		CurrentActionMsg  = _U('open_cloackroom')
+		CurrentActionData = {}
+	end)
+end
+
+function OpenGetStocksMenu()
+	ESX.TriggerServerCallback('master_mechanicjob:getItems', function(items)
+		local elements = {}
+
+		for i=1, #items, 1 do
+			table.insert(elements, {
+				label = items[i].label,
+				value = i
+			})
+		end
+
+		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'stocks_menu', {
+			title    = 'لوازم',
+			align    = 'right',
+			elements = elements
+		}, function(data, menu)
+			menu.close()
+
+			ESX.TriggerServerCallback('master_mechanicjob:GetItem', function()
+				OpenGetStocksMenu()
+			end, items[data.current.value].name, items[data.current.value].amount)
+		end, function(data, menu)
+			menu.close()
+		end)
+	end, 'item')
+end
+
+AddEventHandler('master_mechanicjob:hasEnteredMarker', function(part)
+
+	if part == 'Cloakroom' then
+		CurrentAction     = 'menu_cloakroom'
+		CurrentActionMsg  = _U('open_cloackroom')
+		CurrentActionData = {}
+	elseif part == 'ItemInventory' then
+		CurrentAction     = 'menu_items'
+		CurrentActionMsg  = 'جهت دسترسی به لوازم E بزنید.'
+		CurrentActionData = {}
+	elseif part == 'CarSpawn' then
+		CurrentAction     = 'menu_cars'
+		CurrentActionMsg  = 'جهت دسترسی به منوی ماشینها لطفا E بزنید.'
+		CurrentActionData = {}
+	end
+	
+	if CurrentActionMsg ~= nil then
+		exports.pNotify:SendNotification({text = CurrentActionMsg, type = "info", timeout = 4000})
+	end
+end)
+
+AddEventHandler('master_mechanicjob:hasExitedMarker', function(part)
+	if not isInShopMenu then
+		ESX.UI.Menu.CloseAll()
+	end
+	
+	CurrentAction = nil
+end)
+
 
 RegisterNetEvent('esx:playerLoaded')
 AddEventHandler('esx:playerLoaded', function(xPlayer)
@@ -317,3 +615,145 @@ end)
 
 AddEventHandler('esx:onPlayerDeath', function(data) isDead = true end)
 AddEventHandler('esx:onPlayerSpawn', function(spawn) isDead = false end)
+
+function OpenVehicleSpawnerMenu()
+	local playerCoords = GetEntityCoords(PlayerPedId())
+	PlayerData = ESX.GetPlayerData()
+
+	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'vehicle', {
+		title    = 'گاراژ',
+		align    = 'right',
+		elements = {
+			{label = 'خودرو ها', action = 'garage'},
+			{label = 'انتقال ماشین به گاراژ', action = 'store_garage'}
+	}}, function(data, menu)
+		if data.current.action == 'garage' then
+			local garage = {}
+
+			ESX.TriggerServerCallback('esx_vehicleshop:retrieveJobGradeVehicles', function(jobVehicles)
+				if #jobVehicles > 0 then
+					local allVehicleProps = {}
+
+					for k,v in ipairs(jobVehicles) do
+						if IsModelInCdimage(v.name) then
+							local label = v.label
+							local car_plate = 'MC ' .. v.id
+							car_data = {}
+							if v.model_data ~= nil then
+								car_data = json.decode(v.model_data)
+							end
+							
+							car_data.plate = car_plate
+							
+							table.insert(garage, {
+								label = label,
+								model = v.name,
+								plate = car_plate,
+								stored = true
+							})
+
+							allVehicleProps[car_plate] = car_data
+						end
+					end
+
+					if #garage > 0 then
+						ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'vehicle_garage', {
+							title    = _U('garage_title'),
+							align    = 'right',
+							elements = garage
+						}, function(data2, menu2)
+							if data2.current.stored then
+								local foundSpawn, spawnPoint = GetAvailableVehicleSpawnPoint()
+
+								if foundSpawn then
+									menu2.close()
+
+									ESX.Game.SpawnVehicle(data2.current.model, spawnPoint.coords, spawnPoint.heading, function(vehicle)
+										local vehicleProps = allVehicleProps[data2.current.plate]
+										
+										ESX.Game.SetVehicleProperties(vehicle, vehicleProps)
+										--local debugp = ESX.Game.GetVehicleProperties(vehicle)
+										--print_r(debugp)
+										TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
+										--TriggerServerEvent('esx_vehicleshop:setJobVehicleState', data2.current.plate, false)
+
+										local vehNet = NetworkGetNetworkIdFromEntity(vehicle)
+										local plate = GetVehicleNumberPlateText(vehicle)
+										TriggerServerEvent("SOSAY_Locking:GiveKeys", vehNet, plate)
+										exports.pNotify:SendNotification({text = _U('garage_released'), type = "success", timeout = 5000})
+									end)
+								else
+									exports.pNotify:SendNotification({text = "فضای خالی برای خارج کردن خودرو وجود ندارد.", type = "error", timeout = 5000})
+								end
+							else
+								exports.pNotify:SendNotification({text = _U('garage_notavailable'), type = "error", timeout = 4000})
+							end
+						end, function(data2, menu2)
+							menu2.close()
+						end)
+					else
+						exports.pNotify:SendNotification({text = _U('garage_empty'), type = "error", timeout = 4000})
+					end
+				else
+					exports.pNotify:SendNotification({text = _U('garage_empty'), type = "error", timeout = 4000})
+				end
+			end, 'car')
+		elseif data.current.action == 'store_garage' then
+			StoreVehicle()
+		end
+	end, function(data, menu)
+		menu.close()
+	end)
+end
+
+function GetAvailableVehicleSpawnPoint()
+	local spawnPoints = Config.Zones.CarSpawnLocation
+	local found, foundSpawnPoint = false, nil
+
+	for i=1, #spawnPoints, 1 do
+		if ESX.Game.IsSpawnPointClear(spawnPoints[i].coords, spawnPoints[i].radius) then
+			found, foundSpawnPoint = true, spawnPoints[i]
+			break
+		end
+	end
+
+	if found then
+		return true, foundSpawnPoint
+	else
+		exports.pNotify:SendNotification({text = _U('vehicle_blocked'), type = "error", timeout = 6000})	
+		return false
+	end
+end
+
+function StoreVehicle()
+	local ped = GetPlayerPed(-1)
+	local playerCoords = GetEntityCoords(PlayerPedId())
+    if (DoesEntityExist(ped) and not IsEntityDead(ped)) then 
+        local pos = GetEntityCoords(ped)
+
+        if (IsPedSittingInAnyVehicle(ped)) then 
+            local vehicle = GetVehiclePedIsIn(ped, false)
+			if (GetPedInVehicleSeat( vehicle, -1 ) == ped) then
+				local entity = vehicle
+				local attempt = 0
+
+				exports.pNotify:SendNotification({text = "خودرو شما به گاراژ منتقل شد.", type = "success", timeout = 4000})
+				while not NetworkHasControlOfEntity(entity) and attempt < 30.0 and DoesEntityExist(entity) do
+					Wait(100)
+					NetworkRequestControlOfEntity(entity)
+					attempt = attempt + 1
+				end
+
+				if DoesEntityExist(entity) and NetworkHasControlOfEntity(entity) then
+					ESX.Game.DeleteVehicle(entity)
+					return
+				end
+			else 
+				exports.pNotify:SendNotification({text = "شما باید پشت فرمان باشید.", type = "error", timeout = 4000})
+			end
+        else
+            exports.pNotify:SendNotification({text = "شما باید در خودرو باشید.", type = "error", timeout = 4000})
+        end 
+    end
+end
+
