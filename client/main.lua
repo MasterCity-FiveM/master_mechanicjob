@@ -1,13 +1,14 @@
+ESX = nil
 local HasAlreadyEnteredMarker = false
 local CurrentAction, CurrentActionMsg, CurrentActionData = nil, '', {}
 local isDead, isBusy = false, false
-local myCar = {}
-ESX = nil
-isInShopMenu = false
+local myCar, CarBeforeChanges, blipInServices = {}, {}, {}
+local totalPrice = 0
 local isInMarker, hasExited, letSleep = false, false, true
 local currentStation, currentPart, currentPartNum
-local lsMenuIsShowed = false
+local lsMenuIsShowed, playerInService, isInShopMenu = false, false, false
 local Vehicles
+
 Citizen.CreateThread(function()
 	while ESX == nil do
 		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
@@ -115,9 +116,21 @@ AddEventHandler('master_keymap:e', function()
 		if CurrentAction == 'menu_cloakroom' then
 			OpenCloakroomMenu()
 		elseif CurrentAction == 'menu_items' then
-			OpenGetStocksMenu()
+			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+				if isInService then
+					OpenGetStocksMenu()
+				else
+					exports.pNotify:SendNotification({text = "شما در حال انجام وظیفه نمی باشید!", type = "error", timeout = 3000})
+				end
+			end, ESX.PlayerData.job.name)
 		elseif CurrentAction == 'menu_cars' then
-			OpenVehicleSpawnerMenu()
+			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+				if isInService then
+					OpenVehicleSpawnerMenu()
+				else
+					exports.pNotify:SendNotification({text = "شما در حال انجام وظیفه نمی باشید!", type = "error", timeout = 3000})
+				end
+			end, ESX.PlayerData.job.name)
 		end
 
 		CurrentAction = nil
@@ -127,7 +140,13 @@ end)
 RegisterNetEvent('master_keymap:f6')
 AddEventHandler('master_keymap:f6', function()
 	if not isDead and ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
-		OpenMobileMechanicActionsMenu()
+		ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+			if isInService then
+				OpenMobileMechanicActionsMenu()
+			else
+				exports.pNotify:SendNotification({text = "شما در حال انجام وظیفه نمی باشید!", type = "error", timeout = 3000})
+			end
+		end, ESX.PlayerData.job.name)
 	end
 end)
 
@@ -476,29 +495,27 @@ function OpenCloakroomMenu()
 				  TriggerEvent('esx:restoreLoadout')
 			end)
 		
-			if Config.EnableESXService then
-				ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
-					if isInService and ESX.PlayerData.job.name ~= 'fbi' then
-						playerInService = false
+			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
+				if isInService and ESX.PlayerData.job.name ~= 'fbi' then
+					playerInService = false
 
-						local notification = {
-							title    = _U('service_anonunce'),
-							subject  = '',
-							msg      = _U('service_out_announce', GetPlayerName(PlayerId())),
-							iconType = 1
-						}
+					local notification = {
+						title    = _U('service_anonunce'),
+						subject  = '',
+						msg      = _U('service_out_announce', GetPlayerName(PlayerId())),
+						iconType = 1
+					}
 
-						TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
+					TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
 
-						TriggerServerEvent('esx_service:disableService', ESX.PlayerData.job.name)
-						TriggerEvent('master_mechanicjob:updateBlip')
-						exports.pNotify:SendNotification({text = _U('service_out'), type = "info", timeout = 3000})
-					end
-				end, ESX.PlayerData.job.name)
-			end
+					TriggerServerEvent('esx_service:disableService', ESX.PlayerData.job.name)
+					TriggerEvent('master_mechanicjob:updateBlip')
+					exports.pNotify:SendNotification({text = _U('service_out'), type = "info", timeout = 3000})
+				end
+			end, ESX.PlayerData.job.name)
 		end
 
-		if Config.EnableESXService and data.current.value ~= 'citizen_wear' then
+		if data.current.value ~= 'citizen_wear' then
 			local awaitService
 
 			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
@@ -777,29 +794,38 @@ function CustomizeCar()
 	end
 	local vehicle = GetVehiclePedIsIn(playerPed, false)
 	if vehicle then
-		lsMenuIsShowed = true
+		local tmp_myCar = ESX.Game.GetVehicleProperties(vehicle)
+		ESX.TriggerServerCallback('master_mechanicjob:check_car', function(status)
+			if status == true then
+				lsMenuIsShowed = true
 
-		Citizen.CreateThread(function()
-			while lsMenuIsShowed do
-				Citizen.Wait(0)
-				DisableControlAction(2, 288, true)
-				DisableControlAction(2, 289, true)
-				DisableControlAction(2, 170, true)
-				DisableControlAction(2, 167, true)
-				DisableControlAction(2, 168, true)
-				DisableControlAction(2, 23, true)
-				DisableControlAction(0, 75, true)  -- Disable exit vehicle
-				DisableControlAction(27, 75, true) -- Disable exit vehicle
+				Citizen.CreateThread(function()
+					while lsMenuIsShowed do
+						Citizen.Wait(0)
+						DisableControlAction(2, 288, true)
+						DisableControlAction(2, 289, true)
+						DisableControlAction(2, 170, true)
+						DisableControlAction(2, 167, true)
+						DisableControlAction(2, 168, true)
+						DisableControlAction(2, 23, true)
+						DisableControlAction(0, 75, true)  -- Disable exit vehicle
+						DisableControlAction(27, 75, true) -- Disable exit vehicle
+					end
+				end)
+				
+				
+				FreezeEntityPosition(vehicle, true)
+
+				myCar = tmp_myCar
+				CarBeforeChanges = myCar
+				totalPrice = 0
+				ESX.UI.Menu.CloseAll()
+				GetAction({value = 'main'})
+			else
+				isBusy = false
+				exports.pNotify:SendNotification({text = 'مالک این خودرو مشخص نیست، امکان شخصی سازی وجود ندارد.', type = "error", timeout = 3000})
 			end
-		end)
-		
-		
-		FreezeEntityPosition(vehicle, true)
-
-		myCar = ESX.Game.GetVehicleProperties(vehicle)
-
-		ESX.UI.Menu.CloseAll()
-		GetAction({value = 'main'})
+		end, tmp_myCar)
 	else
 		exports.pNotify:SendNotification({text = 'شما باید درون خودرو باشید.', type = "error", timeout = 3000})
 	end
@@ -1010,6 +1036,11 @@ function GetAction(data)
 		end
 	end
 
+	if data.value == 'main' then
+		table.insert(elements, {label = "مبلغ کل فاکتور", modType = "mk_options", factors = true})		
+		table.insert(elements, {label = "بازگرداندن تغییرات", modType = "mk_options", returncar = true})		
+	end
+	
 	table.sort(elements, function(a, b)
 		return a.label < b.label
 	end)
@@ -1025,20 +1056,22 @@ function OpenLSMenu(elems, menuName, menuTitle, parent)
 		align    = 'top-right',
 		elements = elems
 	}, function(data, menu)
-		local isRimMod, found = false, false
+		local isRimMod, found, otherOptions = false, false, false
 		local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
 
 		if data.current.modType == "modFrontWheels" then
 			isRimMod = true
+		elseif data.current.modType == "mk_options" then
+			otherOptions = true
 		end
-
+		
 		for k,v in pairs(Config.Menus) do
 
-			if k == data.current.modType or isRimMod then
+			if k == data.current.modType or isRimMod or otherOptions then
 
 				if data.current.label == _U('by_default') or string.match(data.current.label, _U('installed')) then
 					exports.pNotify:SendNotification({text = _U('already_own', data.current.label), type = "error", timeout = 3000})
-					TriggerEvent('master_mechanicjob:installMod')
+					TriggerEvent('master_mechanicjob:installMod', 0)
 				else
 					local vehiclePrice = 50000
 
@@ -1048,8 +1081,18 @@ function OpenLSMenu(elems, menuName, menuTitle, parent)
 							break
 						end
 					end
-
-					if isRimMod then
+					
+					if data.current.factors then
+						exports.pNotify:SendNotification({text = 'شما برای این خودرو مبلغ ' .. totalPrice .. '$ خرج کردید.', type = "info", timeout = 3000})
+						return
+					elseif data.current.returncar then
+						ESX.Game.SetVehicleProperties(vehicle, CarBeforeChanges)
+						lsMenuIsShowed = false
+						FreezeEntityPosition(vehicle, false)
+						TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', CarBeforeChanges, totalPrice)
+						totalPrice = 0
+						exports.pNotify:SendNotification({text = 'خودرو به حالت اولیه بازگشت.', type = "info", timeout = 3000})
+					elseif isRimMod then
 						price = math.floor(vehiclePrice * data.current.price / 100)
 						TriggerServerEvent('master_mechanicjob:buyMod', price)
 					elseif v.modType == 11 or v.modType == 12 or v.modType == 13 or v.modType == 15 or v.modType == 16 then
@@ -1123,10 +1166,11 @@ function UpdateMods(data)
 end
 
 RegisterNetEvent('master_mechanicjob:installMod')
-AddEventHandler('master_mechanicjob:installMod', function()
+AddEventHandler('master_mechanicjob:installMod', function(price)
 	local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+	totalPrice = totalPrice + price
 	myCar = ESX.Game.GetVehicleProperties(vehicle)
-	TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', myCar)
+	TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', myCar, 0)
 end)
 
 RegisterNetEvent('master_mechanicjob:cancelInstallMod')
@@ -1147,4 +1191,65 @@ AddEventHandler('master_mechanicjob:cancelInstallMod', function()
 	end
 end)
 
+Citizen.CreateThread(function()
+	while true do
+		Citizen.Wait(60000)
+		TriggerEvent('master_mechanicjob:updateBlip')
+	end
+end)
 
+RegisterNetEvent('master_mechanicjob:updateBlip')
+AddEventHandler('master_mechanicjob:updateBlip', function()
+
+	-- Refresh all blips
+	for k, existingBlip in pairs(blipInServices) do
+		RemoveBlip(existingBlip)
+	end
+
+	-- Clean the blip table
+	blipInServices = {}
+
+	if not playerInService then
+		return
+	end
+	
+	while ESX == nil do
+		Citizen.Wait(0)
+	end
+	
+	while ESX.GetPlayerData().job == nil do
+		Citizen.Wait(6000)
+	end
+
+	ESX.PlayerData = ESX.GetPlayerData()
+
+	if ESX.PlayerData.job and (ESX.PlayerData.job.name == 'mechanic') then
+		ESX.TriggerServerCallback('esx_service:getInServOnlinePlayers', function(players)
+			for i=1, #players, 1 do
+				if players[i].job.name == ESX.PlayerData.job.name then
+					local id = GetPlayerFromServerId(players[i].source)
+					if NetworkIsPlayerActive(id) and GetPlayerPed(id) ~= PlayerPedId() then
+						createBlip(id)
+					end
+				end
+			end
+		end, ESX.PlayerData.job.name)
+	end
+end)
+
+function createBlip(id)
+	local ped = GetPlayerPed(id)
+	local blip = GetBlipFromEntity(ped)
+
+	if not DoesBlipExist(blip) then -- Add blip and create head display on player
+		blip = AddBlipForEntity(ped)
+		SetBlipSprite(blip, 1)
+		ShowHeadingIndicatorOnBlip(blip, true) -- Player Blip indicator
+		SetBlipRotation(blip, math.ceil(GetEntityHeading(ped))) -- update rotation
+		SetBlipNameToPlayerName(blip, id) -- update blip name
+		SetBlipScale(blip, 0.7) -- set scale
+		SetBlipAsShortRange(blip, true)
+
+		table.insert(blipInServices, blip) -- add blip to array so we can remove it later
+	end
+end

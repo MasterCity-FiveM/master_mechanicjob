@@ -92,13 +92,7 @@ Locales['en'] = {
   ['service_out_announce'] = 'Shahrvand ~y~%s~s~ az List afrade dar hale anjame vazife kharej shod.',
   
   ['open_cloackroom'] = 'دکمه E را فشار دهید تا لباس های خود را عوض کنید.',
-  
-  
-  
-  
-  
-  
-  
+   
   
   ['by_default'] = 'default',
   ['installed'] = 'installed',

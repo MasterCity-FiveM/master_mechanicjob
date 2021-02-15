@@ -198,7 +198,7 @@ AddEventHandler('master_mechanicjob:buyMod', function(price)
 		end)
 
 		if price < societyAccount.money then
-			TriggerClientEvent('master_mechanicjob:installMod', _source)
+			TriggerClientEvent('master_mechanicjob:installMod', _source, price)
 			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('purchased'), type = "success", timeout = 3000, layout = "bottomCenter"})
 			societyAccount.removeMoney(price)
 		else
@@ -207,7 +207,7 @@ AddEventHandler('master_mechanicjob:buyMod', function(price)
 		end
 	else
 		if price < xPlayer.getMoney() then
-			TriggerClientEvent('master_mechanicjob:installMod', _source)
+			TriggerClientEvent('master_mechanicjob:installMod', _source, price)
 			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('purchased'), type = "success", timeout = 3000, layout = "bottomCenter"})
 			xPlayer.removeMoney(price)
 		else
@@ -217,8 +217,22 @@ AddEventHandler('master_mechanicjob:buyMod', function(price)
 	end
 end)
 
+ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, vehicleProps)
+	local xPlayer = ESX.GetPlayerFromId(source)
+
+	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
+		['@plate'] = vehicleProps.plate
+	}, function(result)
+		if result[1] then
+			cb(true)
+		else
+			cb(false)
+		end
+	end)
+end)
+
 RegisterServerEvent('master_mechanicjob:refreshOwnedVehicle')
-AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps)
+AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps, totalPrice)
 	local xPlayer = ESX.GetPlayerFromId(source)
 
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
@@ -226,12 +240,16 @@ AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps)
 	}, function(result)
 		if result[1] then
 			local vehicle = json.decode(result[1].vehicle)
-
+			
 			if vehicleProps.model == vehicle.model then
 				MySQL.Async.execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
 					['@plate'] = vehicleProps.plate,
 					['@vehicle'] = json.encode(vehicleProps)
 				})
+				
+				if totalPrice and totalPrice > 0 then
+					xPlayer.addMoney(totalPrice)
+				end
 			else
 				print(('master_mechanicjob: %s attempted to upgrade vehicle with mismatching vehicle model!'):format(xPlayer.identifier))
 			end
