@@ -708,7 +708,7 @@ function OpenVehicleSpawnerMenu()
 
 										local vehNet = NetworkGetNetworkIdFromEntity(vehicle)
 										local plate = GetVehicleNumberPlateText(vehicle)
-										TriggerServerEvent("SOSAY_Locking:GiveKeys", vehNet, plate)
+										TriggerServerEvent("car_lock:GiveKeys", vehNet, plate)
 										exports.pNotify:SendNotification({text = _U('garage_released'), type = "success", timeout = 5000})
 									end)
 								else
