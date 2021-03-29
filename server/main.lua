@@ -12,6 +12,7 @@ TriggerEvent('esx_society:registerSociety', 'mechanic', 'mechanic', 'society_mec
 
 RegisterServerEvent('master_mechanicjob:impound_carstart')
 AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:impound_carstart', {veh = veh})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	if xPlayer == nil or xPlayer.job == nil or xPlayer.job.name == nil then
@@ -30,6 +31,7 @@ AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:repair_car', function(source, cb)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:repair_car', {})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	if xPlayer == nil or xPlayer.job == nil or xPlayer.job.name == nil then
@@ -55,6 +57,7 @@ ESX.RegisterServerCallback('master_mechanicjob:repair_car', function(source, cb)
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:getItems', function(source, cb, item_type)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:getItems', {item_type = item_type})
 	local xPlayer = ESX.GetPlayerFromId(source)
 	items = {}
 	if xPlayer == nil or xPlayer.job == nil or xPlayer.job.name == nil then
@@ -116,6 +119,7 @@ function GetItemCount(source, item)
 end
 
 ESX.RegisterServerCallback('master_mechanicjob:GetItem', function(source, cb, itemName, amount)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:GetItem', {itemName = itemName, amount = amount})
 	local source = source
 	local xPlayer = ESX.GetPlayerFromId(source)
 	
@@ -164,6 +168,7 @@ ESX.RegisterServerCallback('master_mechanicjob:GetItem', function(source, cb, it
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:getVehiclesPrices', function(source, cb)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:getVehiclesPrices', {})
 	if not Vehicles then
 		MySQL.Async.fetchAll('SELECT * FROM vehicles', {}, function(result)
 			local vehicles = {}
@@ -185,6 +190,7 @@ end)
 
 RegisterServerEvent('master_mechanicjob:buyMod')
 AddEventHandler('master_mechanicjob:buyMod', function(price)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:buyMod', {price = price})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	price = tonumber(price)
@@ -217,6 +223,7 @@ AddEventHandler('master_mechanicjob:buyMod', function(price)
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, vehicleProps)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {vehicleProps = vehicleProps})
 	local xPlayer = ESX.GetPlayerFromId(source)
 
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
@@ -232,6 +239,7 @@ end)
 
 RegisterServerEvent('master_mechanicjob:refreshOwnedVehicle')
 AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps, totalPrice)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:refreshOwnedVehicle', {totalPrice = totalPrice})
 	local xPlayer = ESX.GetPlayerFromId(source)
 
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
