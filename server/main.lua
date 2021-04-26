@@ -8,7 +8,7 @@ TriggerEvent('esx_service:activateService', 'mechanic', Config.MaxInService)
 
 
 TriggerEvent('esx_phone:registerNumber', 'mechanic', _U('mechanic_customer'), true, true)
-TriggerEvent('esx_society:registerSociety', 'mechanic', 'mechanic', 'society_mechanic', 'society_mechanic', 'society_mechanic', {type = 'private'})
+TriggerEvent('master_society:registerSociety', 'mechanic', 'mechanic', 'society_mechanic', 'society_mechanic', 'society_mechanic', {type = 'private'})
 
 RegisterServerEvent('master_mechanicjob:impound_carstart')
 AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
