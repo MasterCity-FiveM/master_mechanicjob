@@ -21,6 +21,7 @@ Citizen.CreateThread(function()
 
 	ESX.PlayerData = ESX.GetPlayerData()
 	
+	
 	ESX.TriggerServerCallback('master_mechanicjob:getVehiclesPrices', function(vehicles)
 		Vehicles = vehicles
 	end)
@@ -152,10 +153,17 @@ end)
 
 function OpenMobileMechanicActionsMenu()
 	ESX.UI.Menu.CloseAll()
-
-	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'mobile_mechanic_actions', {
-		title    = _U('mechanic'),
-		align    = 'top-right',
+	
+	if ESX.PlayerData.job.grade_name == 'boss' then
+		elements = {
+			{label = _U('billing'),       value = 'billing'},
+			{label = _U('repair'),        value = 'fix_vehicle'},
+			{label = _U('clean'),         value = 'clean_vehicle'},
+			{label = _U('imp_veh'),       value = 'del_vehicle'},
+			{label = 'شخصی سازی خودرو',       value = 'custom_vehicle'},
+			{label = 'پنل مدیریت', value = 'boss_action'},
+		}
+	else
 		elements = {
 			{label = _U('billing'),       value = 'billing'},
 			{label = _U('repair'),        value = 'fix_vehicle'},
@@ -163,7 +171,15 @@ function OpenMobileMechanicActionsMenu()
 			{label = _U('imp_veh'),       value = 'del_vehicle'},
 			{label = 'شخصی سازی خودرو',       value = 'custom_vehicle'},
 			--{label = _U('place_objects'), value = 'object_spawner'}
-	}}, function(data, menu)
+		}
+	end
+	
+	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'mobile_mechanic_actions', {
+		title    = _U('mechanic'),
+		align    = 'top-right',
+		elements = 
+	
+	}, function(data, menu)
 		if isBusy then return end
 
 		if data.current.value == 'billing' then
@@ -186,6 +202,9 @@ function OpenMobileMechanicActionsMenu()
 			end, function(data, menu)
 				menu.close()
 			end)
+		elseif data.current.value == 'boss_action' then
+			menu.close()
+			TriggerEvent('master_society:RequestOpenBossMenu')
 		elseif data.current.value == 'fix_vehicle' then
 			local playerPed = PlayerPedId()
 			local vehicle   = ESX.Game.GetVehicleInDirection()

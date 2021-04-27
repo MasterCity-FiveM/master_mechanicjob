@@ -4,6 +4,10 @@ local Vehicles
 
 TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
+while ESX == nil do
+	Citizen.Wait(1)
+end
+
 TriggerEvent('esx_service:activateService', 'mechanic', Config.MaxInService)
 
 
