@@ -177,7 +177,7 @@ function OpenMobileMechanicActionsMenu()
 	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'mobile_mechanic_actions', {
 		title    = _U('mechanic'),
 		align    = 'top-right',
-		elements = 
+		elements = elements
 	
 	}, function(data, menu)
 		if isBusy then return end
