@@ -24,6 +24,7 @@ AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
 	end
 	
 	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Impound car start', xPlayer.source)
 		return
 	end
 		
@@ -42,6 +43,8 @@ ESX.RegisterServerCallback('master_mechanicjob:SpawnGarageCar', function (source
 	if xPlayer.job.name == 'mechanic' then
 		TriggerEvent('master_warden:AllowSpawnCar', xPlayer.source)
 		cb(true)
+	else
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Spawn garage car', xPlayer.source)
 	end
 end)
 
@@ -55,6 +58,7 @@ ESX.RegisterServerCallback('master_mechanicjob:repair_car', function(source, cb)
 	end
 	
 	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Repair car', xPlayer.source)
 		cb(false)
 		return
 	end
@@ -81,6 +85,7 @@ ESX.RegisterServerCallback('master_mechanicjob:getItems', function(source, cb, i
 	end	
 	
 	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Get items', xPlayer.source)
 		cb(items)
 		return
 	end
@@ -147,6 +152,12 @@ ESX.RegisterServerCallback('master_mechanicjob:GetItem', function(source, cb, it
 		return
 	end
 	
+	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Get item', xPlayer.source)
+		cb(items)
+		return
+	end
+	
 	if jobItems[xPlayer.job.name] == nil or jobItems[xPlayer.job.name][xPlayer.job.grade_name] == nil or jobItems[xPlayer.job.name][xPlayer.job.grade_name]['item'] == nil then
 		GetJobItems(xPlayer.job.name, xPlayer.job.grade_name, 'item')
 		cb()
@@ -209,7 +220,13 @@ AddEventHandler('master_mechanicjob:buyMod', function(price)
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	price = tonumber(price)
-
+	
+	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] buy Mod', xPlayer.source)
+		cb(items)
+		return
+	end
+	
 	if Config.IsMechanicJobOnly then
 		local societyAccount
 
@@ -240,7 +257,13 @@ end)
 ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, vehicleProps)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {vehicleProps = vehicleProps})
 	local xPlayer = ESX.GetPlayerFromId(source)
-
+	
+	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] check car', xPlayer.source)
+		cb(items)
+		return
+	end
+	
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
 		['@plate'] = vehicleProps.plate
 	}, function(result)
@@ -256,6 +279,12 @@ RegisterServerEvent('master_mechanicjob:refreshOwnedVehicle')
 AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps, totalPrice)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:refreshOwnedVehicle', {totalPrice = totalPrice})
 	local xPlayer = ESX.GetPlayerFromId(source)
+	
+	if xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] refreshOwnedVehicle', xPlayer.source)
+		cb(items)
+		return
+	end
 
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
 		['@plate'] = vehicleProps.plate
