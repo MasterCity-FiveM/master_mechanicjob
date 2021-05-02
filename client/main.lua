@@ -716,20 +716,24 @@ function OpenVehicleSpawnerMenu()
 								if foundSpawn then
 									menu2.close()
 
-									ESX.Game.SpawnVehicle(data2.current.model, spawnPoint.coords, spawnPoint.heading, function(vehicle)
-										local vehicleProps = allVehicleProps[data2.current.plate]
-										
-										ESX.Game.SetVehicleProperties(vehicle, vehicleProps)
-										--local debugp = ESX.Game.GetVehicleProperties(vehicle)
-										--print_r(debugp)
-										TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
-										--TriggerServerEvent('esx_vehicleshop:setJobVehicleState', data2.current.plate, false)
+									ESX.TriggerServerCallback('master_mechanicjob:SpawnGarageCar', function(status)
+										if status == true then
+											ESX.Game.SpawnVehicle(data2.current.model, spawnPoint.coords, spawnPoint.heading, function(vehicle)
+												local vehicleProps = allVehicleProps[data2.current.plate]
+												
+												ESX.Game.SetVehicleProperties(vehicle, vehicleProps)
+												--local debugp = ESX.Game.GetVehicleProperties(vehicle)
+												--print_r(debugp)
+												TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
+												--TriggerServerEvent('esx_vehicleshop:setJobVehicleState', data2.current.plate, false)
 
-										local vehNet = NetworkGetNetworkIdFromEntity(vehicle)
-										local plate = GetVehicleNumberPlateText(vehicle)
-										TriggerServerEvent("car_lock:GiveKeys", vehNet, plate)
-										exports.pNotify:SendNotification({text = _U('garage_released'), type = "success", timeout = 5000})
-									end)
+												local vehNet = NetworkGetNetworkIdFromEntity(vehicle)
+												local plate = GetVehicleNumberPlateText(vehicle)
+												TriggerServerEvent("car_lock:GiveKeys", vehNet, plate)
+												exports.pNotify:SendNotification({text = _U('garage_released'), type = "success", timeout = 5000})
+											end)
+										end
+									end, data2.current.model)
 								else
 									exports.pNotify:SendNotification({text = "فضای خالی برای خارج کردن خودرو وجود ندارد.", type = "error", timeout = 5000})
 								end

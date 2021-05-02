@@ -34,6 +34,17 @@ AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
 	end)
 end)
 
+ESX.RegisterServerCallback('master_mechanicjob:SpawnGarageCar', function (source, cb, carname)
+	-- TODO CHECK CAR ALLOWED
+	local _source = source
+	ESX.RunCustomFunction("anti_ddos", _source, 'master_vehicles:SpawnGarageCar', {})
+	local xPlayer = ESX.GetPlayerFromId(_source)
+	if xPlayer.job.name == 'mechanic' then
+		TriggerEvent('master_warden:AllowSpawnCar', xPlayer.source)
+		cb(true)
+	end
+end)
+
 ESX.RegisterServerCallback('master_mechanicjob:repair_car', function(source, cb)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:repair_car', {})
 	local _source = source
