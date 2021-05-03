@@ -10,7 +10,6 @@ Config.DrawDistance               = 100.0
 Config.MarkerSize                 = {x = 1.5, y = 1.5, z = 0.5}
 Config.MarkerColor                = {r = 50, g = 50, b = 204}
 
-
 Config.Zones = {
 	Blip = {
 		Coords  = vector3(-368.2418,-130.7473, 38.66516),
