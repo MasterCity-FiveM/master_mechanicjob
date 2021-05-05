@@ -420,7 +420,7 @@ function cleanPlayer(playerPed)
 	SetPedArmour(playerPed, 0)
 	ClearPedBloodDamage(playerPed)
 	ResetPedVisibleDamage(playerPed)
-	ClearPedLastWeaponDamage(playerPed)
+	--ClearPedLastWeaponDamage(playerPed)
 	ResetPedMovementClipset(playerPed, 0)
 end
 
@@ -511,7 +511,6 @@ function OpenCloakroomMenu()
           		SetModelAsNoLongerNeeded(model)
 
           		TriggerEvent('skinchanger:loadSkin', skin)
-				  TriggerEvent('esx:restoreLoadout')
 			end)
 		
 			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
