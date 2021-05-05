@@ -511,6 +511,7 @@ function OpenCloakroomMenu()
           		SetModelAsNoLongerNeeded(model)
 
           		TriggerEvent('skinchanger:loadSkin', skin)
+				TriggerEvent('esx:restoreLoadout')
 			end)
 		
 			ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
