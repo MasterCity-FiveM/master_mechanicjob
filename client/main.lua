@@ -140,6 +140,7 @@ end)
 
 RegisterNetEvent('master_keymap:f6')
 AddEventHandler('master_keymap:f6', function()
+	ESX.UI.Menu.CloseAll()
 	if not isDead and ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
 		ESX.TriggerServerCallback('esx_service:isInService', function(isInService)
 			if isInService then
