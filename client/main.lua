@@ -7,7 +7,11 @@ local totalPrice = 0
 local isInMarker, hasExited, letSleep = false, false, true
 local currentStation, currentPart, currentPartNum
 local lsMenuIsShowed, playerInService, isInShopMenu = false, false, false
-local Vehicles
+local Vehicles = {}
+local PlayerData = {}
+local isInLSMarker = false
+local NoChangeCar = {}
+local DefaultCar = nil
 
 Citizen.CreateThread(function()
 	while ESX == nil do
@@ -85,7 +89,7 @@ Citizen.CreateThread(function()
 					isInMarker, currentPart = true, 'CarSpawn'
 				end
 			end
-
+			
 			if isInMarker and not HasAlreadyEnteredMarker or (isInMarker and LastPart ~= currentPart) then
 				if LastPart and LastPart ~= currentPart then
 					TriggerEvent('master_mechanicjob:hasExitedMarker', currentPart)
@@ -106,6 +110,12 @@ Citizen.CreateThread(function()
 				Citizen.Wait(2000)
 			end
 		else
+			local coords = GetEntityCoords(GetPlayerPed(-1))
+			for k,v in pairs(Config.Zones.CustomLocations) do
+				if GetDistanceBetweenCoords(coords,v.x, v.y ,v.z , true) < 12 and IsPedInAnyVehicle(GetPlayerPed(-1), false) then
+					exports.pNotify:SendNotification({text = "برای درخواست ارتقا لطفا U بزنید!", type = "error", timeout = 5000})
+				end
+			end
 			Citizen.Wait(10000)
 		end
 	end
@@ -162,6 +172,7 @@ function OpenMobileMechanicActionsMenu()
 			{label = _U('clean'),         value = 'clean_vehicle'},
 			{label = _U('imp_veh'),       value = 'del_vehicle'},
 			{label = 'شخصی سازی خودرو',       value = 'custom_vehicle'},
+			{label = 'پایان شخصی سازی',       value = 'custom_finish'},
 			{label = 'پنل مدیریت', value = 'boss_action'},
 		}
 	else
@@ -171,6 +182,7 @@ function OpenMobileMechanicActionsMenu()
 			{label = _U('clean'),         value = 'clean_vehicle'},
 			{label = _U('imp_veh'),       value = 'del_vehicle'},
 			{label = 'شخصی سازی خودرو',       value = 'custom_vehicle'},
+			{label = 'پایان شخصی سازی',       value = 'custom_finish'},
 			--{label = _U('place_objects'), value = 'object_spawner'}
 		}
 	end
@@ -304,10 +316,14 @@ function OpenMobileMechanicActionsMenu()
 		elseif data.current.value == 'custom_vehicle' then
 			local playerCoords = GetEntityCoords(GetPlayerPed(-1))
 			if(Vdist(playerCoords.x, playerCoords.y, playerCoords.z, Config.Zones.Cloakroom.x, Config.Zones.Cloakroom.y, Config.Zones.Cloakroom.z) < 30) then
-				CustomizeCar()
+				
+			CustomizeCar()
 			else
 				exports.pNotify:SendNotification({text = "شما در نزدیکی مکانیکی نیستید.", type = "error", timeout = 4000})
 			end
+		elseif data.current.value == 'custom_finish' then
+			TriggerServerEvent('master_mechanicjob:FinishCustom')
+			menu.close()
 		end
 	end, function(data, menu)
 		menu.close()
@@ -654,16 +670,81 @@ end)
 RegisterNetEvent('esx:playerLoaded')
 AddEventHandler('esx:playerLoaded', function(xPlayer)
 	ESX.PlayerData = xPlayer
+	PlayerData.job = job
 end)
 
 RegisterNetEvent('esx:setJob')
 AddEventHandler('esx:setJob', function(job)
 	ESX.PlayerData.job = job
+	PlayerData.job = job
 end)
 
 AddEventHandler('esx:onPlayerDeath', function(data) isDead = true end)
 AddEventHandler('esx:onPlayerSpawn', function(spawn) isDead = false end)
 AddEventHandler('playerSpawned', function() isDead = false end)
+
+Citizen.CreateThread(function()
+	while true do
+		Citizen.Wait(60000)
+		TriggerEvent('master_mechanicjob:updateBlip')
+	end
+end)
+
+RegisterNetEvent('master_mechanicjob:updateBlip')
+AddEventHandler('master_mechanicjob:updateBlip', function()
+
+	-- Refresh all blips
+	for k, existingBlip in pairs(blipInServices) do
+		RemoveBlip(existingBlip)
+	end
+
+	-- Clean the blip table
+	blipInServices = {}
+
+	if not playerInService then
+		return
+	end
+	
+	while ESX == nil do
+		Citizen.Wait(0)
+	end
+	
+	while ESX.GetPlayerData().job == nil do
+		Citizen.Wait(6000)
+	end
+
+	ESX.PlayerData = ESX.GetPlayerData()
+
+	if ESX.PlayerData.job and (ESX.PlayerData.job.name == 'mechanic') then
+		ESX.TriggerServerCallback('esx_service:getInServOnlinePlayers', function(players)
+			for i=1, #players, 1 do
+				if players[i].job.name == ESX.PlayerData.job.name then
+					local id = GetPlayerFromServerId(players[i].source)
+					if NetworkIsPlayerActive(id) and GetPlayerPed(id) ~= PlayerPedId() then
+						createBlip(id)
+					end
+				end
+			end
+		end, ESX.PlayerData.job.name)
+	end
+end)
+
+function createBlip(id)
+	local ped = GetPlayerPed(id)
+	local blip = GetBlipFromEntity(ped)
+
+	if not DoesBlipExist(blip) then -- Add blip and create head display on player
+		blip = AddBlipForEntity(ped)
+		SetBlipSprite(blip, 1)
+		ShowHeadingIndicatorOnBlip(blip, true) -- Player Blip indicator
+		SetBlipRotation(blip, math.ceil(GetEntityHeading(ped))) -- update rotation
+		SetBlipNameToPlayerName(blip, id) -- update blip name
+		SetBlipScale(blip, 0.7) -- set scale
+		SetBlipAsShortRange(blip, true)
+
+		table.insert(blipInServices, blip) -- add blip to array so we can remove it later
+	end
+end
 
 function OpenVehicleSpawnerMenu()
 	local playerCoords = GetEntityCoords(PlayerPedId())
@@ -810,59 +891,139 @@ function StoreVehicle()
     end
 end
 
-function CustomizeCar()
-	local playerPed = PlayerPedId()
-	if not IsPedSittingInAnyVehicle(playerPed) then
-		exports.pNotify:SendNotification({text = 'شما باید درون خودرو باشید.', type = "error", timeout = 3000})
-		return
-	end
-	local vehicle = GetVehiclePedIsIn(playerPed, false)
-	if vehicle then
-		local tmp_myCar = ESX.Game.GetVehicleProperties(vehicle)
-		ESX.TriggerServerCallback('master_mechanicjob:check_car', function(status)
-			if status == true then
-				lsMenuIsShowed = true
+local oldCar
+function InstanMod(vehicle)
+	oldCar = myCar
+	myCar = ESX.Game.GetVehicleProperties(vehicle)
+end
 
-				Citizen.CreateThread(function()
-					while lsMenuIsShowed do
-						Citizen.Wait(0)
-						DisableControlAction(2, 288, true)
-						DisableControlAction(2, 289, true)
-						DisableControlAction(2, 170, true)
-						DisableControlAction(2, 167, true)
-						DisableControlAction(2, 168, true)
-						DisableControlAction(2, 23, true)
-						DisableControlAction(0, 75, true)  -- Disable exit vehicle
-						DisableControlAction(27, 75, true) -- Disable exit vehicle
+local globlalvehicle = 0
+RegisterNetEvent('master_mechanicjob:DontInstallMod')
+AddEventHandler('master_mechanicjob:DontInstallMod', function()
+	myCar = oldCar
+	ESX.Game.SetVehicleProperties(globlalvehicle, myCar)
+	oldCar = nil
+end)
+
+RegisterNetEvent('master_mechanicjob:cancelInstallMod')
+AddEventHandler('master_mechanicjob:cancelInstallMod', function(vehicle)
+	ESX.Game.SetVehicleProperties(vehicle, myCar)
+end)
+
+RegisterNetEvent('master_mechanicjob:CloseMenus')
+AddEventHandler('master_mechanicjob:CloseMenus', function()
+	ESX.UI.Menu.CloseAll()
+end)
+
+function OpenLSMenu(elems, menuName, menuTitle, parent, vehicle)
+	ESX.UI.Menu.Open('default', GetCurrentResourceName(), menuName,
+	{
+		title    = menuTitle,
+		align    = 'top-right',
+		elements = elems
+	}, function(data, menu)
+		local isRimMod, found = false, false
+
+		if data.current.modType == "modFrontWheels" then
+			isRimMod = true
+		end
+
+		for k,v in pairs(Config.Menus) do
+
+			if k == data.current.modType or isRimMod then
+
+				if data.current.label == _U('by_default') or string.match(data.current.label, _U('installed')) then
+					ESX.ShowNotification(_U('already_own', data.current.label))
+				else
+					local vehiclePrice = 5000000
+
+					for i=1, #Vehicles, 1 do
+						if GetEntityModel(vehicle) == GetHashKey(Vehicles[i].model) then
+							vehiclePrice = Vehicles[i].price
+							break
+						end
 					end
-				end)
-				
-				
-				FreezeEntityPosition(vehicle, true)
+					local tmpcar32 = ESX.Game.GetVehicleProperties(vehicle)
+					local carPlate = tmpcar32.plate
+					if isRimMod then
+						price = math.floor(vehiclePrice * data.current.price / 100)
+						TriggerServerEvent('master_mechanicjob:buyMod', price, carPlate)
+						InstanMod(vehicle)
+					elseif v.modType == 11 or v.modType == 12 or v.modType == 13 or v.modType == 15 or v.modType == 16 then
+						price = math.floor(vehiclePrice * v.price[data.current.modNum + 1] / 100)
+						TriggerServerEvent('master_mechanicjob:buyMod', price, carPlate)
+						InstanMod(vehicle)
+					-- elseif v.modType == 17 then
+					-- 	price = math.floor(vehiclePrice * v.price[1] / 100)
+					-- 	TriggerServerEvent('master_mechanicjob:buyMod', price, myCar.plate)
+					-- 	InstanMod(vehicle)
+					else
+						price = math.floor(vehiclePrice * v.price / 100)
+						TriggerServerEvent('master_mechanicjob:buyMod', price, carPlate)
+						InstanMod(vehicle)
+					end
+				end
 
-				myCar = tmp_myCar
-				CarBeforeChanges = myCar
-				totalPrice = 0
-				ESX.UI.Menu.CloseAll()
-				GetAction({value = 'main'})
-			else
-				isBusy = false
-				exports.pNotify:SendNotification({text = 'مالک این خودرو مشخص نیست، امکان شخصی سازی وجود ندارد.', type = "error", timeout = 3000})
+				menu.close()
+				found = true
+				break
 			end
-		end, tmp_myCar)
-	else
-		exports.pNotify:SendNotification({text = 'شما باید درون خودرو باشید.', type = "error", timeout = 3000})
+
+		end
+
+		if not found then
+			GetAction(data.current, vehicle)
+		end
+	end, function(data, menu) -- on cancel
+		menu.close()
+		lsMenuIsShowed = false
+		TriggerEvent('master_mechanicjob:cancelInstallMod', vehicle)
+		SetVehicleDoorsShut(vehicle, false)
+		if parent == nil  then
+			myCar = {}
+		end
+	end, function(data, menu) -- on change
+		UpdateMods(data.current, vehicle)
+	end, function()
+		lsMenuIsShowed = false
+		TriggerEvent('master_mechanicjob:cancelInstallMod', vehicle)
+		SetVehicleDoorsShut(vehicle, false)
+	end)
+end
+
+function UpdateMods(data, vehicle)
+	if data.modType then
+		local props = {}
+
+		if data.wheelType then
+			props['wheels'] = data.wheelType
+			ESX.Game.SetVehicleProperties(vehicle, props)
+			props = {}
+		elseif data.modType == 'neonColor' then
+			if data.modNum[1] == 0 and data.modNum[2] == 0 and data.modNum[3] == 0 then
+				props['neonEnabled'] = { false, false, false, false }
+			else
+				props['neonEnabled'] = { true, true, true, true }
+			end
+			ESX.Game.SetVehicleProperties(vehicle, props)
+			props = {}
+		elseif data.modType == 'tyreSmokeColor' then
+			props['modSmokeEnabled'] = true
+			ESX.Game.SetVehicleProperties(vehicle, props)
+			props = {}
+		end
+
+		props[data.modType] = data.modNum
+		ESX.Game.SetVehicleProperties(vehicle, props)
 	end
 end
 
-function GetAction(data)
+function GetAction(data, vehicle)
 	local elements  = {}
 	local menuName  = ''
 	local menuTitle = ''
 	local parent    = nil
-
 	local playerPed = PlayerPedId()
-	local vehicle = GetVehiclePedIsIn(playerPed, false)
 	local currentMods = ESX.Game.GetVehicleProperties(vehicle)
 
 	if data.value == 'modSpeakers' or
@@ -883,7 +1044,7 @@ function GetAction(data)
 		SetVehicleDoorsShut(vehicle, false)
 	end
 
-	local vehiclePrice = 50000
+	local vehiclePrice = 5000000
 
 	for i=1, #Vehicles, 1 do
 		if GetEntityModel(vehicle) == GetHashKey(Vehicles[i].model) then
@@ -901,7 +1062,7 @@ function GetAction(data)
 			parent    = v.parent
 
 			if v.modType then
-				
+
 				if v.modType == 22 then
 					table.insert(elements, {label = " " .. _U('by_default'), modType = k, modNum = false})
 				elseif v.modType == 'neonColor' or v.modType == 'tyreSmokeColor' then -- disable neon
@@ -909,8 +1070,6 @@ function GetAction(data)
 				elseif v.modType == 'color1' or v.modType == 'color2' or v.modType == 'pearlescentColor' or v.modType == 'wheelColor' then
 					local num = myCar[v.modType]
 					table.insert(elements, {label = " " .. _U('by_default'), modType = k, modNum = num})
-				elseif v.modType == 17 then
-					table.insert(elements, {label = " " .. _U('no_turbo'), modType = k, modNum = false})
  				else
 					table.insert(elements, {label = " " .. _U('by_default'), modType = k, modNum = -1})
 				end
@@ -996,7 +1155,6 @@ function GetAction(data)
 						end
 					end
 				elseif v.modType == 11 or v.modType == 12 or v.modType == 13 or v.modType == 15 or v.modType == 16 then
-					SetVehicleModKit(vehicle, 0)
 					local modCount = GetNumVehicleMods(vehicle, v.modType) -- UPGRADES
 					for j = 0, modCount, 1 do
 						local _label = ''
@@ -1060,220 +1218,169 @@ function GetAction(data)
 		end
 	end
 
-	if data.value == 'main' then
-		table.insert(elements, {label = "مبلغ کل فاکتور", modType = "mk_options", factors = true})		
-		table.insert(elements, {label = "بازگرداندن تغییرات", modType = "mk_options", returncar = true})		
-	end
-	
 	table.sort(elements, function(a, b)
 		return a.label < b.label
 	end)
 
-	OpenLSMenu(elements, menuName, menuTitle, parent)
+	OpenLSMenu(elements, menuName, menuTitle, parent, vehicle)
 end
 
-
-function OpenLSMenu(elems, menuName, menuTitle, parent)
-	ESX.UI.Menu.Open('default', GetCurrentResourceName(), menuName,
-	{
-		title    = menuTitle,
-		align    = 'top-right',
-		elements = elems
-	}, function(data, menu)
-		local isRimMod, found, otherOptions = false, false, false
-		local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-
-		if data.current.modType == "modFrontWheels" then
-			isRimMod = true
-		elseif data.current.modType == "mk_options" then
-			otherOptions = true
-		end
+function CustomizeCar()
+	local playerPed = PlayerPedId()
+	local globlalvehicle = GetVehiclePedIsIn(GetPlayerPed(-1), false)
+	
+	if globlalvehicle == 0 then
+		globlalvehicle = ESX.Game.GetVehicleInDirection(4)
+	end
+	
+	if globlalvehicle then
+		local myCar = ESX.Game.GetVehicleProperties(globlalvehicle)
 		
-		for k,v in pairs(Config.Menus) do
-
-			if k == data.current.modType or isRimMod or otherOptions then
-
-				if data.current.label == _U('by_default') or string.match(data.current.label, _U('installed')) then
-					exports.pNotify:SendNotification({text = _U('already_own', data.current.label), type = "error", timeout = 3000})
-					TriggerEvent('master_mechanicjob:installMod', 0)
-				else
-					local vehiclePrice = 50000
-
-					for i=1, #Vehicles, 1 do
-						if GetEntityModel(vehicle) == GetHashKey(Vehicles[i].model) then
-							vehiclePrice = Vehicles[i].price
-							break
-						end
-					end
-					
-					if data.current.factors then
-						exports.pNotify:SendNotification({text = 'شما برای این خودرو مبلغ ' .. totalPrice .. '$ خرج کردید.', type = "info", timeout = 3000})
-						return
-					elseif data.current.returncar then
-						ESX.Game.SetVehicleProperties(vehicle, CarBeforeChanges)
-						lsMenuIsShowed = false
-						FreezeEntityPosition(vehicle, false)
-						TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', CarBeforeChanges, totalPrice)
-						totalPrice = 0
-						exports.pNotify:SendNotification({text = 'خودرو به حالت اولیه بازگشت.', type = "info", timeout = 3000})
-					elseif isRimMod then
-						price = math.floor(vehiclePrice * data.current.price / 100)
-						TriggerServerEvent('master_mechanicjob:buyMod', price)
-					elseif v.modType == 11 or v.modType == 12 or v.modType == 13 or v.modType == 15 or v.modType == 16 then
-						price = math.floor(vehiclePrice * v.price[data.current.modNum + 1] / 100)
-						TriggerServerEvent('master_mechanicjob:buyMod', price)
-					elseif v.modType == 17 then
-						price = math.floor(vehiclePrice * v.price[1] / 100)
-						TriggerServerEvent('master_mechanicjob:buyMod', price)
-					else
-						price = math.floor(vehiclePrice * v.price / 100)
-						TriggerServerEvent('master_mechanicjob:buyMod', price)
-					end
+		ESX.TriggerServerCallback('master_mechanicjob:check_car', function(status, data)
+			if status == true then
+				NetworkRequestControlOfEntity(globlalvehicle)
+				local timeout = 2000
+				while timeout > 0 and not NetworkHasControlOfEntity(globlalvehicle) do
+					Wait(100)
+					timeout = timeout - 100
 				end
 
-				menu.close()
-				found = true
-				break
-			end
-
-		end
-
-		if not found then
-			GetAction(data.current)
-		end
-	end, function(data, menu) -- on cancel
-		menu.close()
-		TriggerEvent('master_mechanicjob:cancelInstallMod')
-
-		local playerPed = PlayerPedId()
-		local vehicle = GetVehiclePedIsIn(playerPed, false)
-		SetVehicleDoorsShut(vehicle, false)
-
-		if parent == nil then
-			lsMenuIsShowed = false
-			local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-			FreezeEntityPosition(vehicle, false)
-			myCar = {}
-		end
-	end, function(data, menu) -- on change
-		UpdateMods(data.current)
-	end)
-end
-
-function UpdateMods(data)
-	local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-
-	if data.modType then
-		local props = {}
-		
-		if data.wheelType then
-			props['wheels'] = data.wheelType
-			ESX.Game.SetVehicleProperties(vehicle, props)
-			props = {}
-		elseif data.modType == 'neonColor' then
-			if data.modNum[1] == 0 and data.modNum[2] == 0 and data.modNum[3] == 0 then
-				props['neonEnabled'] = { false, false, false, false }
+				ESX.UI.Menu.CloseAll()
+				Citizen.Wait(100)
+				GetAction({value = 'main'}, globlalvehicle)
+				lsMenuIsShowed = true
+				Citizen.CreateThread(function()
+					while lsMenuIsShowed do
+						Citizen.Wait(0)
+						DisableControlAction(2, 288, true)
+						DisableControlAction(2, 289, true)
+						DisableControlAction(2, 170, true)
+						DisableControlAction(2, 167, true)
+						DisableControlAction(2, 168, true)
+						DisableControlAction(2, 23, true)
+						DisableControlAction(0, 75, true)  -- Disable exit vehicle
+						DisableControlAction(27, 75, true) -- Disable exit vehicle
+					end
+				end)
 			else
-				props['neonEnabled'] = { true, true, true, true }
+				isBusy = false
+				exports.pNotify:SendNotification({text = 'مالک این خودرو مشخص نیست، امکان شخصی سازی وجود ندارد.', type = "error", timeout = 3000})
 			end
-			ESX.Game.SetVehicleProperties(vehicle, props)
-			props = {}
-		elseif data.modType == 'tyreSmokeColor' then
-			props['modSmokeEnabled'] = true
-			ESX.Game.SetVehicleProperties(vehicle, props)
-			props = {}
-		end
-
-		props[data.modType] = data.modNum
-		ESX.Game.SetVehicleProperties(vehicle, props)
+		end, myCar.plate)
+	else
+		exports.pNotify:SendNotification({text = 'شما باید درون و یا کنار خودرو باشید.', type = "error", timeout = 3000})
 	end
 end
 
-RegisterNetEvent('master_mechanicjob:installMod')
-AddEventHandler('master_mechanicjob:installMod', function(price)
-	local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-	totalPrice = totalPrice + price
-	myCar = ESX.Game.GetVehicleProperties(vehicle)
-	TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', myCar, 0)
+function paySuccess(vehicle)
+	ESX.UI.Menu.CloseAll()
+	AlreadyCalledMechanic = false
+	local newcar = ESX.Game.GetVehicleProperties(vehicle)
+	Citizen.Wait(500)
+	TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', newcar)
+	ESX.Game.SetVehicleProperties(vehicle, newcar)
+	FreezeEntityPosition(vehicle, false)
+	TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+	DefaultCar = nil
+end
+
+RegisterNetEvent('master_mechanicjob:Default')
+AddEventHandler('master_mechanicjob:Default', function(vehicle)
+	NoChangeCar = vehicle
 end)
 
-RegisterNetEvent('master_mechanicjob:cancelInstallMod')
-AddEventHandler('master_mechanicjob:cancelInstallMod', function()
-	local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-	if (GetPedInVehicleSeat(vehicle, -1) ~= PlayerPedId()) then
-		 vehicle = GetPlayersLastVehicle(PlayerPedId())
-	end
-		ESX.Game.SetVehicleProperties(vehicle, myCar)
-	if not (myCar.modTurbo) then
-		ToggleVehicleMod(vehicle,  18, false)
-	end
-	if not (myCar.modXenon) then
-		ToggleVehicleMod(vehicle,  22, false)
-	end
-	if not (myCar.windowTint) then
-		SetVehicleWindowTint(vehicle, 0)
-	end
-end)
-
-Citizen.CreateThread(function()
-	while true do
-		Citizen.Wait(60000)
-		TriggerEvent('master_mechanicjob:updateBlip')
-	end
-end)
-
-RegisterNetEvent('master_mechanicjob:updateBlip')
-AddEventHandler('master_mechanicjob:updateBlip', function()
-
-	-- Refresh all blips
-	for k, existingBlip in pairs(blipInServices) do
-		RemoveBlip(existingBlip)
-	end
-
-	-- Clean the blip table
-	blipInServices = {}
-
-	if not playerInService then
-		return
+RegisterNetEvent('master_keymap:u')
+AddEventHandler('master_keymap:u', function()
+	local inGarage = false
+	local coords = GetEntityCoords(GetPlayerPed(-1))
+	for k,v in pairs(Config.Zones.CustomLocations) do
+		if GetDistanceBetweenCoords(coords,v.x, v.y ,v.z , true) < 12 then
+			inGarage = true
+		end
 	end
 	
-	while ESX == nil do
-		Citizen.Wait(0)
-	end
-	
-	while ESX.GetPlayerData().job == nil do
-		Citizen.Wait(6000)
-	end
+	local playerPed = GetPlayerPed(-1)
+	if IsPedInAnyVehicle(playerPed, false) and inGarage then
+		local vehicle = GetVehiclePedIsIn(GetPlayerPed(-1), false)
 
-	ESX.PlayerData = ESX.GetPlayerData()
+		DefaultCar = ESX.Game.GetVehicleProperties(vehicle)
+		ESX.TriggerServerCallback('master_mechanicjob:checkStatus', function(ordered)
+			if not ordered then
+			
+				local playerPed = PlayerPedId()
+				PedPosition		= GetEntityCoords(playerPed)
+				local PlayerCoords = { x = PedPosition.x, y = PedPosition.y, z = PedPosition.z }
 
-	if ESX.PlayerData.job and (ESX.PlayerData.job.name == 'mechanic') then
-		ESX.TriggerServerCallback('esx_service:getInServOnlinePlayers', function(players)
-			for i=1, #players, 1 do
-				if players[i].job.name == ESX.PlayerData.job.name then
-					local id = GetPlayerFromServerId(players[i].source)
-					if NetworkIsPlayerActive(id) and GetPlayerPed(id) ~= PlayerPedId() then
-						createBlip(id)
+				TriggerServerEvent('esx_addons_gcphone:startCall', 'mechanic', 'سلام، درخواست ارتقا خودرو دارم.', PlayerCoords, {
+					PlayerCoords = { x = PedPosition.x, y = PedPosition.y, z = PedPosition.z },
+				})
+				
+				AlreadyCalledMechanic = true
+				FreezeEntityPosition(vehicle, true)
+				TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate, DefaultCar, true)
+			elseif ordered then
+				ESX.TriggerServerCallback('master_mechanicjob:PriceOfBill', function(price)
+					if price > 0 then
+						ESX.UI.Menu.CloseAll()
+						Citizen.Wait(100)
+						ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'askforpay', {
+							title    = 'هزینه شما $' .. ESX.Math.GroupDigits(price) .. '، می باشد، چگونه پرداخت میکنید؟',
+							align    = 'top-right',
+							elements = {
+								{label = 'پرداخت نقدی', value = 'cash'},
+								{label = 'عابربانک', value = 'bank'},
+								{label = 'انصراف', value = 'cancel'}
+							}
+						}, function(data, menu)
+							if data.current.value == 'cash' then
+								ESX.TriggerServerCallback('master_mechanicjob:PayVehicleOrders', function(success)
+									if success then
+										paySuccess(vehicle)
+										exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
+										AlreadyCalledMechanic = false
+									else
+										exports.pNotify:SendNotification({text = 'شما به این میزان پول نقد همراه ندارید.', type = "error", timeout = 3000})
+									end
+								end, DefaultCar.plate, false)
+							elseif data.current.value == 'bank' then
+								ESX.TriggerServerCallback('master_mechanicjob:PayVehicleOrders', function(success)
+									if success then
+										paySuccess(vehicle)
+										exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
+										AlreadyCalledMechanic = false
+									else
+										exports.pNotify:SendNotification({text = 'موجودی حساب شما کافی نیست.', type = "error", timeout = 3000})
+									end
+								end, DefaultCar.plate, true)
+							elseif data.current.value == 'cancel' then
+								ESX.Game.SetVehicleProperties(vehicle, NoChangeCar)
+								FreezeEntityPosition(vehicle, false)
+								TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+								DefaultCar = nil
+								NoChangeCar = nil
+								menu.close()
+								AlreadyCalledMechanic = false
+							end
+						end, function(data, menu)
+							menu.close()
+						end)
+					else
+						TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+						AlreadyCalledMechanic = false
+						FreezeEntityPosition(vehicle, false)
+						DefaultCar = nil
 					end
-				end
+				end, DefaultCar.plate)
 			end
-		end, ESX.PlayerData.job.name)
+		end, DefaultCar)
 	end
 end)
 
-function createBlip(id)
-	local ped = GetPlayerPed(id)
-	local blip = GetBlipFromEntity(ped)
-
-	if not DoesBlipExist(blip) then -- Add blip and create head display on player
-		blip = AddBlipForEntity(ped)
-		SetBlipSprite(blip, 1)
-		ShowHeadingIndicatorOnBlip(blip, true) -- Player Blip indicator
-		SetBlipRotation(blip, math.ceil(GetEntityHeading(ped))) -- update rotation
-		SetBlipNameToPlayerName(blip, id) -- update blip name
-		SetBlipScale(blip, 0.7) -- set scale
-		SetBlipAsShortRange(blip, true)
-
-		table.insert(blipInServices, blip) -- add blip to array so we can remove it later
+function getPedSeat(p, v)
+	local seats = GetVehicleModelNumberOfSeats(GetEntityModel(v))
+	for i = -1, seats do
+		local t = GetPedInVehicleSeat(v, i)
+		if (t == p) then return i end
 	end
+	return -2
 end

@@ -1,6 +1,8 @@
 ESX                = nil
 jobItems  = {}
 local Vehicles
+local IsPlayerReq = {}
+local Mechanics = {}
 
 TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
@@ -80,13 +82,13 @@ ESX.RegisterServerCallback('master_mechanicjob:getItems', function(source, cb, i
 	local xPlayer = ESX.GetPlayerFromId(source)
 	items = {}
 	if xPlayer == nil or xPlayer.job == nil or xPlayer.job.name == nil then
-		cb(items)
+		cb({})
 		return
 	end	
 	
 	if xPlayer.job.name ~= 'mechanic' then
 		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Get items', xPlayer.source)
-		cb(items)
+		cb({})
 		return
 	end
 	
@@ -154,7 +156,7 @@ ESX.RegisterServerCallback('master_mechanicjob:GetItem', function(source, cb, it
 	
 	if xPlayer.job.name ~= 'mechanic' then
 		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] Get item', xPlayer.source)
-		cb(items)
+		cb({})
 		return
 	end
 	
@@ -214,96 +216,165 @@ ESX.RegisterServerCallback('master_mechanicjob:getVehiclesPrices', function(sour
 	end
 end)
 
-RegisterServerEvent('master_mechanicjob:buyMod')
-AddEventHandler('master_mechanicjob:buyMod', function(price)
-	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:buyMod', {price = price})
-	local _source = source
-	local xPlayer = ESX.GetPlayerFromId(_source)
-	price = tonumber(price)
-	
-	if xPlayer.job.name ~= 'mechanic' then
-		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] buy Mod', xPlayer.source)
-		cb(items)
+RegisterServerEvent('master_mechanicjob:FinishCustom')
+AddEventHandler('master_mechanicjob:FinishCustom', function()
+	local _Source = source
+	local xPlayer = ESX.GetPlayerFromId(_Source)
+	if not xPlayer.job or xPlayer.job.name ~= 'mechanic' then
 		return
 	end
 	
-	if Config.IsMechanicJobOnly then
-		local societyAccount
-
-		TriggerEvent('esx_addonaccount:getSharedAccount', 'society_mechanic', function(account)
-			societyAccount = account
-		end)
-
-		if price < societyAccount.money then
-			TriggerClientEvent('master_mechanicjob:installMod', _source, price)
-			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('purchased'), type = "success", timeout = 3000, layout = "bottomCenter"})
-			societyAccount.removeMoney(price)
-		else
-			TriggerClientEvent('master_mechanicjob:cancelInstallMod', _source)
-			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('not_enough_money'), type = "error", timeout = 3000, layout = "bottomCenter"})
-		end
+	if Mechanics[_Source] then
+		local ThisCar = Mechanics[_Source]
+		IsPlayerReq[ThisCar].customer = _Source
+		IsPlayerReq[ThisCar].incustom = false
+		TriggerClientEvent('master_mechanicjob:CloseMenus', _Source)
+		--TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[ThisCar].source)
+		TriggerClientEvent('master_mechanicjob:Default', IsPlayerReq[ThisCar].source , IsPlayerReq[ThisCar].props)
+		TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[ThisCar].source, { text = 'ارتقا خودرو شما به پایان رسید.', type = "success", timeout = 6000, layout = "bottomCenter"})
+		TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'ارتقا خودرو به پایان رسید، کل مبلغ: ' .. IsPlayerReq[ThisCar].price .. '$', type = "success", timeout = 12000, layout = "bottomCenter"})
+		Mechanics[_Source] = nil
 	else
-		if price < xPlayer.getMoney() then
-			TriggerClientEvent('master_mechanicjob:installMod', _source, price)
-			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('purchased'), type = "success", timeout = 3000, layout = "bottomCenter"})
-			xPlayer.removeMoney(price)
-		else
-			TriggerClientEvent('master_mechanicjob:cancelInstallMod', _source)
-			TriggerClientEvent("pNotify:SendNotification", _source, { text = _U('not_enough_money'), type = "error", timeout = 3000, layout = "bottomCenter"})
-		end
+		TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'شما درخواست ارتقایی نداشتید.', type = "error", timeout = 3000, layout = "bottomCenter"})
 	end
 end)
 
-ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, vehicleProps)
-	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {vehicleProps = vehicleProps})
+ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb, vehicle)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:checkStatus', {})
+	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(source)
-	
-	if xPlayer.job.name ~= 'mechanic' then
-		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] check car', xPlayer.source)
-		cb(items)
+	local plate = vehicle.plate
+	if not plate then
 		return
 	end
 	
-	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
-		['@plate'] = vehicleProps.plate
+	MySQL.Async.fetchAll('SELECT * FROM owned_vehicles WHERE plate = @plate', {["@plate"] = tostring(plate)},
+	function(result)
+		if result[1] ~= nil then
+			if IsPlayerReq[plate] then
+				if IsPlayerReq[plate].incustom == true then
+					TriggerClientEvent("pNotify:SendNotification", _source, { text = 'خوردو شما در حال ارتقا می باشد.', type = "error", timeout = 3000, layout = "bottomCenter"})
+				else
+					cb(true)
+				end
+			else
+				cb(false)
+				TriggerClientEvent("pNotify:SendNotification", _source, { text = 'درخواست شما ثبت شد.', type = "success", timeout = 6000, layout = "bottomCenter"})
+			end
+		else
+			TriggerClientEvent("pNotify:SendNotification", _source, { text = 'صاحب خودرو مشخص نیست.', type = "error", timeout = 3000, layout = "bottomCenter"})
+		end
+    end)
+end)
+
+ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, plate)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {})
+	local _source = source
+	local xPlayer = ESX.GetPlayerFromId(_source)
+	if xPlayer.job and xPlayer.job.name ~= 'mechanic' then
+		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] check car', xPlayer.source)
+		cb(false)
+		return
+	end
+	MySQL.Async.fetchAll('SELECT * FROM owned_vehicles WHERE plate = @plate', {
+		['@plate'] = plate
 	}, function(result)
 		if result[1] then
-			cb(true)
+			if IsPlayerReq[plate] then
+				if IsPlayerReq[plate].customer == 0 or IsPlayerReq[plate].customer == source then
+					if Mechanics[_source] and Mechanics[_source] ~= plate then
+						TriggerClientEvent("pNotify:SendNotification", _source, { text = 'شما در حال ارتقا خودرو می باشید.', type = "error", timeout = 3000, layout = "bottomCenter"})
+						return
+					end
+					cb(true, result[1])
+					IsPlayerReq[plate].customer = _source
+					IsPlayerReq[plate].incustom = true
+					Mechanics[_source] = plate
+					if IsPlayerReq[plate].source ~= _source then
+						TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[plate].source)
+					end
+					TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[plate].source, { text = 'مکانیک ارتقا خوردو شما را شروع کرد.', type = "info", timeout = 3000, layout = "bottomCenter"})
+				else
+					TriggerClientEvent("pNotify:SendNotification", _source, { text = 'یک مکانیک دیگر درحال ارتقا خودرو می باشد.', type = "error", timeout = 3000, layout = "bottomCenter"})
+				end
+			else
+				TriggerClientEvent("pNotify:SendNotification", _source, { text = 'هیچکس برای ارتقا درخواستی ثبت نکرده است.', type = "error", timeout = 3000, layout = "bottomCenter"})
+			end
 		else
-			cb(false)
+			cb(false, false)
 		end
 	end)
 end)
 
-RegisterServerEvent('master_mechanicjob:refreshOwnedVehicle')
-AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps, totalPrice)
-	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:refreshOwnedVehicle', {totalPrice = totalPrice})
-	local xPlayer = ESX.GetPlayerFromId(source)
-	
-	if xPlayer.job.name ~= 'mechanic' then
-		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] refreshOwnedVehicle', xPlayer.source)
-		cb(items)
-		return
+RegisterServerEvent('master_mechanicjob:VehiclesInWatingList')
+AddEventHandler('master_mechanicjob:VehiclesInWatingList', function(Plate, vehicleProps , NoClean)
+	local _Source = source
+	if NoClean then
+		if not IsPlayerReq[Plate] then
+			IsPlayerReq[Plate] = {source = _Source, incustom = false ,customer = 0, price = 0, props = vehicleProps}
+		end
+	else
+		IsPlayerReq[Plate] = nil
 	end
+end)
 
+ESX.RegisterServerCallback('master_mechanicjob:PriceOfBill', function(source, cb, vehicle)
+	if IsPlayerReq[vehicle] then
+		cb(IsPlayerReq[vehicle].price)
+	else
+		cb(0)
+	end
+end)
+
+ESX.RegisterServerCallback('master_mechanicjob:PayVehicleOrders', function(source, cb, vehicle, payWithBank)
+	xPlayer = ESX.GetPlayerFromId(source)
+	if IsPlayerReq[vehicle] then
+		if payWithBank then
+			if xPlayer.getAccount('bank').money >= IsPlayerReq[vehicle].price then
+				xPlayer.removeAccountMoney('bank', tonumber(IsPlayerReq[vehicle].price))
+				cb(true)
+			else
+				cb(false)
+			end
+		else
+			if xPlayer.getMoney() >= IsPlayerReq[vehicle].price then
+				xPlayer.removeMoney(tonumber(IsPlayerReq[vehicle].price))
+				cb(true)
+			else
+				cb(false)
+			end
+		end
+	else
+		cb(true)
+	end
+end)
+
+RegisterServerEvent('master_mechanicjob:refreshOwnedVehicle')
+AddEventHandler('master_mechanicjob:refreshOwnedVehicle', function(vehicleProps)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:refreshOwnedVehicle', {})
 	MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
 		['@plate'] = vehicleProps.plate
 	}, function(result)
 		if result[1] then
 			local vehicle = json.decode(result[1].vehicle)
-			
+
 			if vehicleProps.model == vehicle.model then
 				MySQL.Async.execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
 					['@plate'] = vehicleProps.plate,
 					['@vehicle'] = json.encode(vehicleProps)
 				})
-				
-				if totalPrice and totalPrice > 0 then
-					xPlayer.addMoney(totalPrice)
-				end
-			else
-				print(('master_mechanicjob: %s attempted to upgrade vehicle with mismatching vehicle model!'):format(xPlayer.identifier))
 			end
 		end
 	end)
+end)
+
+RegisterServerEvent('master_mechanicjob:buyMod')
+AddEventHandler('master_mechanicjob:buyMod', function(price, plate)
+	local _source = source
+	price = tonumber(price)
+	if IsPlayerReq[plate] then
+		IsPlayerReq[plate].price = tonumber(IsPlayerReq[plate].price) + price
+	else
+		TriggerClientEvent('master_mechanicjob:DontInstallMod', _source)
+	end
 end)
