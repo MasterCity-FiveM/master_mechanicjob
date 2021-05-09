@@ -19,6 +19,7 @@ TriggerEvent('master_society:registerSociety', 'mechanic', 'mechanic', 'society_
 RegisterServerEvent('master_mechanicjob:impound_carstart')
 AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:impound_carstart', {veh = veh})
+	ESX.RunCustomFunction("discord", source, 'impound', 'Impounding', "Veh: **" .. veh .. "**")
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	if xPlayer == nil or xPlayer.job == nil or xPlayer.job.name == nil then
@@ -218,6 +219,7 @@ end)
 
 RegisterServerEvent('master_mechanicjob:FinishCustom')
 AddEventHandler('master_mechanicjob:FinishCustom', function()
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:FinishCustom')
 	local _Source = source
 	local xPlayer = ESX.GetPlayerFromId(_Source)
 	if not xPlayer.job or xPlayer.job.name ~= 'mechanic' then
@@ -240,7 +242,7 @@ AddEventHandler('master_mechanicjob:FinishCustom', function()
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb, vehicle)
-	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:checkStatus', {})
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:checkStatus', {source = source, cb = cb, vehicle = vehicle})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(source)
 	local plate = vehicle.plate
@@ -268,7 +270,7 @@ ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, plate)
-	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {})
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {source = source, cb = cb, plate = plate})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
 	if xPlayer.job and xPlayer.job.name ~= 'mechanic' then
@@ -308,6 +310,7 @@ end)
 
 RegisterServerEvent('master_mechanicjob:VehiclesInWatingList')
 AddEventHandler('master_mechanicjob:VehiclesInWatingList', function(Plate, vehicleProps , NoClean)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:VehiclesInWatingList', {Plate = Plate, vehicleProps = vehicleProps, NoClean = NoClean})
 	local _Source = source
 	if NoClean then
 		if not IsPlayerReq[Plate] then
@@ -327,6 +330,7 @@ ESX.RegisterServerCallback('master_mechanicjob:PriceOfBill', function(source, cb
 end)
 
 ESX.RegisterServerCallback('master_mechanicjob:PayVehicleOrders', function(source, cb, vehicle, payWithBank)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:PayVehicleOrders', {})
 	xPlayer = ESX.GetPlayerFromId(source)
 	if IsPlayerReq[vehicle] then
 		if payWithBank then
@@ -370,6 +374,7 @@ end)
 
 RegisterServerEvent('master_mechanicjob:buyMod')
 AddEventHandler('master_mechanicjob:buyMod', function(price, plate)
+	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:buyMod', {})
 	local _source = source
 	price = tonumber(price)
 	if IsPlayerReq[plate] then
