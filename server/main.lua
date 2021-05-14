@@ -218,13 +218,13 @@ ESX.RegisterServerCallback('master_mechanicjob:getVehiclesPrices', function(sour
 end)
 
 RegisterServerEvent('master_mechanicjob:FinishCustom')
-AddEventHandler('master_mechanicjob:FinishCustom', function()
+AddEventHandler('master_mechanicjob:FinishCustom', function(isSelf)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:FinishCustom')
 	local _Source = source
 	local xPlayer = ESX.GetPlayerFromId(_Source)
-	if not xPlayer.job or xPlayer.job.name ~= 'mechanic' then
+	--[[if not xPlayer.job or xPlayer.job.name ~= 'mechanic' then
 		return
-	end
+	end]]--
 	
 	if Mechanics[_Source] then
 		local ThisCar = Mechanics[_Source]
@@ -233,15 +233,21 @@ AddEventHandler('master_mechanicjob:FinishCustom', function()
 		TriggerClientEvent('master_mechanicjob:CloseMenus', _Source)
 		--TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[ThisCar].source)
 		TriggerClientEvent('master_mechanicjob:Default', IsPlayerReq[ThisCar].source , IsPlayerReq[ThisCar].props)
-		TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[ThisCar].source, { text = 'ارتقا خودرو شما به پایان رسید.', type = "success", timeout = 6000, layout = "bottomCenter"})
-		TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'ارتقا خودرو به پایان رسید، کل مبلغ: ' .. IsPlayerReq[ThisCar].price .. '$', type = "success", timeout = 12000, layout = "bottomCenter"})
+		if isSelf == true then
+			TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'جهت واریز وجه و ترخیص لطفا U بزنید، هزینه: ' .. IsPlayerReq[ThisCar].price .. '$', type = "success", timeout = 12000, layout = "bottomCenter"})
+		else
+			TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[ThisCar].source, { text = 'ارتقا خودرو شما به پایان رسید.', type = "success", timeout = 6000, layout = "bottomCenter"})
+			TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'ارتقا خودرو به پایان رسید، کل مبلغ: ' .. IsPlayerReq[ThisCar].price .. '$', type = "success", timeout = 12000, layout = "bottomCenter"})
+		end
 		Mechanics[_Source] = nil
 	else
-		TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'شما درخواست ارتقایی نداشتید.', type = "error", timeout = 3000, layout = "bottomCenter"})
+		if isSelf == false then
+			TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'شما درخواست ارتقایی نداشتید.', type = "error", timeout = 3000, layout = "bottomCenter"})
+		end
 	end
 end)
 
-ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb, vehicle)
+ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb, vehicle, isSelf)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:checkStatus', {source = source, cb = cb, vehicle = vehicle})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(source)
@@ -255,13 +261,19 @@ ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb
 		if result[1] ~= nil then
 			if IsPlayerReq[plate] then
 				if IsPlayerReq[plate].incustom == true then
-					TriggerClientEvent("pNotify:SendNotification", _source, { text = 'خوردو شما در حال ارتقا می باشد.', type = "error", timeout = 3000, layout = "bottomCenter"})
+					if isSelf then
+						TriggerClientEvent('master_mechanicjob:SelfFinish', _source, true)
+					else
+						TriggerClientEvent("pNotify:SendNotification", _source, { text = 'خوردو شما در حال ارتقا می باشد.', type = "error", timeout = 3000, layout = "bottomCenter"})
+					end
 				else
 					cb(true)
 				end
 			else
 				cb(false)
-				TriggerClientEvent("pNotify:SendNotification", _source, { text = 'درخواست شما ثبت شد.', type = "success", timeout = 6000, layout = "bottomCenter"})
+				if not isSelf then
+					TriggerClientEvent("pNotify:SendNotification", _source, { text = 'درخواست شما ثبت شد.', type = "success", timeout = 6000, layout = "bottomCenter"})
+				end
 			end
 		else
 			TriggerClientEvent("pNotify:SendNotification", _source, { text = 'صاحب خودرو مشخص نیست.', type = "error", timeout = 3000, layout = "bottomCenter"})
@@ -269,14 +281,36 @@ ESX.RegisterServerCallback('master_mechanicjob:checkStatus', function(source, cb
     end)
 end)
 
+ESX.RegisterServerCallback('master_mechanicjob:IsSelfAvailable', function(source, cb)
+	ESX.TriggerServerCallback("esx_service:GetServiceCount", source, function(counts)
+		if counts == 0 then
+			cb(true)
+		else
+			cb(false)
+		end
+	end, 'mechanic')
+end)
+
+ESX.RegisterServerCallback('master_mechanicjob:PriceOfBill', function(source, cb, vehicle)
+	if IsPlayerReq[vehicle] then
+		cb(IsPlayerReq[vehicle].price)
+	else
+		cb(0)
+	end
+end)
+
 ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, plate)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:check_car', {source = source, cb = cb, plate = plate})
 	local _source = source
 	local xPlayer = ESX.GetPlayerFromId(_source)
-	if xPlayer.job and xPlayer.job.name ~= 'mechanic' then
+	--[[if xPlayer.job and xPlayer.job.name ~= 'mechanic' then
 		TriggerEvent('master_warden:InvalidRequest', '[Mechanic] check car', xPlayer.source)
 		cb(false)
 		return
+	end]]--
+	IsMechanic = true
+	if xPlayer.job and xPlayer.job.name ~= 'mechanic' then
+		IsMechanic = false
 	end
 	MySQL.Async.fetchAll('SELECT * FROM owned_vehicles WHERE plate = @plate', {
 		['@plate'] = plate
@@ -295,7 +329,9 @@ ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, 
 					if IsPlayerReq[plate].source ~= _source then
 						TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[plate].source)
 					end
-					TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[plate].source, { text = 'مکانیک ارتقا خوردو شما را شروع کرد.', type = "info", timeout = 3000, layout = "bottomCenter"})
+					if IsMechanic == true then
+						TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[plate].source, { text = 'مکانیک ارتقا خوردو شما را شروع کرد.', type = "info", timeout = 3000, layout = "bottomCenter"})
+					end
 				else
 					TriggerClientEvent("pNotify:SendNotification", _source, { text = 'یک مکانیک دیگر درحال ارتقا خودرو می باشد.', type = "error", timeout = 3000, layout = "bottomCenter"})
 				end
@@ -309,23 +345,15 @@ ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, 
 end)
 
 RegisterServerEvent('master_mechanicjob:VehiclesInWatingList')
-AddEventHandler('master_mechanicjob:VehiclesInWatingList', function(Plate, vehicleProps , NoClean)
+AddEventHandler('master_mechanicjob:VehiclesInWatingList', function(Plate, vehicleProps , CleanUp)
 	ESX.RunCustomFunction("anti_ddos", source, 'master_mechanicjob:VehiclesInWatingList', {Plate = Plate, vehicleProps = vehicleProps, NoClean = NoClean})
 	local _Source = source
-	if NoClean then
+	if CleanUp then
+		IsPlayerReq[Plate] = nil
+	else
 		if not IsPlayerReq[Plate] then
 			IsPlayerReq[Plate] = {source = _Source, incustom = false ,customer = 0, price = 0, props = vehicleProps}
 		end
-	else
-		IsPlayerReq[Plate] = nil
-	end
-end)
-
-ESX.RegisterServerCallback('master_mechanicjob:PriceOfBill', function(source, cb, vehicle)
-	if IsPlayerReq[vehicle] then
-		cb(IsPlayerReq[vehicle].price)
-	else
-		cb(0)
 	end
 end)
 

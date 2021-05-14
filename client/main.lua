@@ -10,8 +10,8 @@ local lsMenuIsShowed, playerInService, isInShopMenu = false, false, false
 local Vehicles = {}
 local PlayerData = {}
 local isInLSMarker = false
-local NoChangeCar = {}
 local DefaultCar = nil
+local DefaultCarArray = {}
 
 Citizen.CreateThread(function()
 	while ESX == nil do
@@ -50,13 +50,13 @@ Citizen.CreateThread(function()
 	while true do
 		Citizen.Wait(0)
 
+		isInMarker, hasExited, letSleep = false, false, true
+		currentPart = nil
+		local playerPed = PlayerPedId()
+		local playerCoords = GetEntityCoords(playerPed)
+
 		if ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
 			
-			isInMarker, hasExited, letSleep = false, false, true
-			currentPart = nil
-			local playerPed = PlayerPedId()
-			local playerCoords = GetEntityCoords(playerPed)
-
 			local distance = #(playerCoords - Config.Zones.Cloakroom)
 
 			if distance < Config.DrawDistance then
@@ -113,17 +113,60 @@ Citizen.CreateThread(function()
 			local coords = GetEntityCoords(GetPlayerPed(-1))
 			for k,v in pairs(Config.Zones.CustomLocations) do
 				if GetDistanceBetweenCoords(coords,v.x, v.y ,v.z , true) < 12 and IsPedInAnyVehicle(GetPlayerPed(-1), false) then
-					exports.pNotify:SendNotification({text = "برای درخواست ارتقا لطفا U بزنید!", type = "error", timeout = 5000})
+					showMessage("برای درخواست ارتقا لطفا U بزنید!")
 				end
 			end
-			Citizen.Wait(10000)
+			
+			local distance = #(playerCoords - Config.Zones.SelfCustom)
+
+			if distance < Config.DrawDistance then
+				DrawMarker(20, Config.Zones.SelfCustom, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
+				letSleep = false
+
+				if distance < 5 then
+					isInMarker, currentPart = true, 'SelfCustom'
+				end
+				
+				if isInMarker and not HasAlreadyEnteredMarker or (isInMarker and LastPart ~= currentPart) then
+					if LastPart and LastPart ~= currentPart then
+						TriggerEvent('master_mechanicjob:hasExitedMarker', currentPart)
+						hasExited = true
+					end
+					
+					HasAlreadyEnteredMarker = true
+					LastPart                = currentPart
+					TriggerEvent('master_mechanicjob:hasEnteredMarker', currentPart)
+				end
+
+				if not hasExited and not isInMarker and HasAlreadyEnteredMarker then
+					HasAlreadyEnteredMarker = false
+					TriggerEvent('master_mechanicjob:hasExitedMarker', LastPart)
+				end
+			end
+			if distance > 50 then
+				Citizen.Wait(10000)
+			end
 		end
 	end
 end)
 
+local UnderShowMessage = false
+function showMessage(msg)
+	Citizen.CreateThread(function()
+		if UnderShowMessage == false then
+			UnderShowMessage = true
+			Citizen.CreateThread(function()
+				exports.pNotify:SendNotification({text = msg, type = "info", timeout = 5000})
+				Citizen.Wait(15000)
+				UnderShowMessage = false
+			end)
+		end
+	end)
+end
+
 RegisterNetEvent('master_keymap:e')
 AddEventHandler('master_keymap:e', function() 
-	if CurrentAction and  ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
+	if CurrentAction and ESX.PlayerData.job and ESX.PlayerData.job.name == 'mechanic' then
 		if CurrentAction == 'menu_cloakroom' then
 			OpenCloakroomMenu()
 		elseif CurrentAction == 'menu_items' then
@@ -145,8 +188,101 @@ AddEventHandler('master_keymap:e', function()
 		end
 
 		CurrentAction = nil
+	elseif CurrentAction and CurrentAction == 'menu_selfcustom' then
+		startSelfCustom()
 	end
 end)
+
+function startSelfCustom()
+	local inGarage = false
+	local coords = GetEntityCoords(GetPlayerPed(-1))
+	for k,v in pairs(Config.Zones.CustomLocations) do
+		if GetDistanceBetweenCoords(coords,v.x, v.y ,v.z , true) < 12 then
+			inGarage = true
+		end
+	end
+	
+	local playerPed = GetPlayerPed(-1)
+	if IsPedInAnyVehicle(playerPed, false) and inGarage then
+		ESX.TriggerServerCallback('master_mechanicjob:IsSelfAvailable', function(available)
+			if available == true then
+				local vehicle = GetVehiclePedIsIn(GetPlayerPed(-1), false)
+				tmpCar = ESX.Game.GetVehicleProperties(vehicle)
+				ESX.TriggerServerCallback('master_mechanicjob:checkStatus', function(ordered)
+					if not ordered then
+						local playerPed = PlayerPedId()
+						PedPosition		= GetEntityCoords(playerPed)
+						local PlayerCoords = { x = PedPosition.x, y = PedPosition.y, z = PedPosition.z }
+						DefaultCar = ESX.Game.GetVehicleProperties(vehicle)
+						DefaultCarArray[DefaultCar.plate] = {}
+						DefaultCarArray[DefaultCar.plate] = DefaultCar
+						exports.pNotify:SendNotification({text = "پس از اعمال تغییرات دلخواه یکبار دیگر E بزنید.", type = "success", timeout = 20000})
+						
+						AlreadyCalledMechanic = true
+						FreezeEntityPosition(vehicle, true)
+						TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate, DefaultCar, false)
+						Citizen.Wait(1000)
+						CustomizeCar()
+					elseif ordered then
+						ESX.TriggerServerCallback('master_mechanicjob:PriceOfBill', function(price)
+							if price > 0 then
+								ESX.UI.Menu.CloseAll()
+								Citizen.Wait(100)
+								ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'askforpay', {
+									title    = 'هزینه شما $' .. ESX.Math.GroupDigits(price) .. '، می باشد، چگونه پرداخت میکنید؟',
+									align    = 'top-right',
+									elements = {
+										{label = 'پرداخت نقدی', value = 'cash'},
+										{label = 'عابربانک', value = 'bank'},
+										{label = 'انصراف', value = 'finishCar'}
+									}
+								}, function(data, menu)
+									if data.current.value == 'cash' then
+										ESX.TriggerServerCallback('master_mechanicjob:PayVehicleOrders', function(success)
+											if success then
+												paySuccess(vehicle)
+												exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
+												AlreadyCalledMechanic = false
+											else
+												exports.pNotify:SendNotification({text = 'شما به این میزان پول نقد همراه ندارید.', type = "error", timeout = 3000})
+											end
+										end, DefaultCar.plate, false)
+									elseif data.current.value == 'bank' then
+										ESX.TriggerServerCallback('master_mechanicjob:PayVehicleOrders', function(success)
+											if success then
+												paySuccess(vehicle)
+												exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
+												AlreadyCalledMechanic = false
+											else
+												exports.pNotify:SendNotification({text = 'موجودی حساب شما کافی نیست.', type = "error", timeout = 3000})
+											end
+										end, DefaultCar.plate, true)
+									elseif data.current.value == 'finishCar' then
+										FreezeEntityPosition(vehicle, false)
+										ESX.Game.SetVehicleProperties(vehicle, DefaultCarArray[DefaultCar.plate])
+										TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
+										DefaultCar = nil
+										menu.close()
+										AlreadyCalledMechanic = false
+									end
+								end, function(data, menu)
+									menu.close()
+								end)
+							else
+								TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
+								AlreadyCalledMechanic = false
+								FreezeEntityPosition(vehicle, false)
+								DefaultCar = nil
+							end
+						end, DefaultCar.plate)
+					end
+				end, tmpCar, true)
+			else
+				exports.pNotify:SendNotification({text = "در حال حاضر مکانیک در شهر می باشد!", type = "error", timeout = 5000})
+			end
+		end)
+	end
+end
 
 RegisterNetEvent('master_keymap:f6')
 AddEventHandler('master_keymap:f6', function()
@@ -316,13 +452,12 @@ function OpenMobileMechanicActionsMenu()
 		elseif data.current.value == 'custom_vehicle' then
 			local playerCoords = GetEntityCoords(GetPlayerPed(-1))
 			if(Vdist(playerCoords.x, playerCoords.y, playerCoords.z, Config.Zones.Cloakroom.x, Config.Zones.Cloakroom.y, Config.Zones.Cloakroom.z) < 30) then
-				
-			CustomizeCar()
+				CustomizeCar()
 			else
 				exports.pNotify:SendNotification({text = "شما در نزدیکی مکانیکی نیستید.", type = "error", timeout = 4000})
 			end
 		elseif data.current.value == 'custom_finish' then
-			TriggerServerEvent('master_mechanicjob:FinishCustom')
+			TriggerServerEvent('master_mechanicjob:FinishCustom', false)
 			menu.close()
 		end
 	end, function(data, menu)
@@ -330,6 +465,10 @@ function OpenMobileMechanicActionsMenu()
 	end)
 end
 
+RegisterNetEvent('master_mechanicjob:SelfFinish')
+AddEventHandler('master_mechanicjob:SelfFinish', function()
+	TriggerServerEvent('master_mechanicjob:FinishCustom', true)
+end)
 RegisterNetEvent('master_mechanicjob:impound_carstart')
 AddEventHandler('master_mechanicjob:impound_carstart', function(veh)
 	if isBusy then
@@ -650,6 +789,10 @@ AddEventHandler('master_mechanicjob:hasEnteredMarker', function(part)
 	elseif part == 'CarSpawn' then
 		CurrentAction     = 'menu_cars'
 		CurrentActionMsg  = 'جهت دسترسی به منوی ماشینها لطفا E بزنید.'
+		CurrentActionData = {}
+	elseif part == 'SelfCustom' then
+		CurrentAction     = 'menu_selfcustom'
+		CurrentActionMsg  = 'در صورتی که مکانیک نیست، E بزنید تا خودتان ماشین را شخصی سازی کنید.'
 		CurrentActionData = {}
 	end
 	
@@ -1280,14 +1423,9 @@ function paySuccess(vehicle)
 	TriggerServerEvent('master_mechanicjob:refreshOwnedVehicle', newcar)
 	ESX.Game.SetVehicleProperties(vehicle, newcar)
 	FreezeEntityPosition(vehicle, false)
-	TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+	TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 	DefaultCar = nil
 end
-
-RegisterNetEvent('master_mechanicjob:Default')
-AddEventHandler('master_mechanicjob:Default', function(vehicle)
-	NoChangeCar = vehicle
-end)
 
 RegisterNetEvent('master_keymap:u')
 AddEventHandler('master_keymap:u', function()
@@ -1302,11 +1440,12 @@ AddEventHandler('master_keymap:u', function()
 	local playerPed = GetPlayerPed(-1)
 	if IsPedInAnyVehicle(playerPed, false) and inGarage then
 		local vehicle = GetVehiclePedIsIn(GetPlayerPed(-1), false)
-
-		DefaultCar = ESX.Game.GetVehicleProperties(vehicle)
+		tmpCar = ESX.Game.GetVehicleProperties(vehicle)
 		ESX.TriggerServerCallback('master_mechanicjob:checkStatus', function(ordered)
 			if not ordered then
-			
+				DefaultCar = ESX.Game.GetVehicleProperties(vehicle)
+				DefaultCarArray[DefaultCar.plate] = {}
+				DefaultCarArray[DefaultCar.plate] = DefaultCar
 				local playerPed = PlayerPedId()
 				PedPosition		= GetEntityCoords(playerPed)
 				local PlayerCoords = { x = PedPosition.x, y = PedPosition.y, z = PedPosition.z }
@@ -1317,7 +1456,7 @@ AddEventHandler('master_keymap:u', function()
 				
 				AlreadyCalledMechanic = true
 				FreezeEntityPosition(vehicle, true)
-				TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate, DefaultCar, true)
+				TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate, DefaultCar, false)
 			elseif ordered then
 				ESX.TriggerServerCallback('master_mechanicjob:PriceOfBill', function(price)
 					if price > 0 then
@@ -1329,7 +1468,7 @@ AddEventHandler('master_keymap:u', function()
 							elements = {
 								{label = 'پرداخت نقدی', value = 'cash'},
 								{label = 'عابربانک', value = 'bank'},
-								{label = 'انصراف', value = 'cancel'}
+								{label = 'انصراف', value = 'finishCar'}
 							}
 						}, function(data, menu)
 							if data.current.value == 'cash' then
@@ -1338,6 +1477,7 @@ AddEventHandler('master_keymap:u', function()
 										paySuccess(vehicle)
 										exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
 										AlreadyCalledMechanic = false
+										TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 									else
 										exports.pNotify:SendNotification({text = 'شما به این میزان پول نقد همراه ندارید.', type = "error", timeout = 3000})
 									end
@@ -1347,17 +1487,17 @@ AddEventHandler('master_keymap:u', function()
 									if success then
 										paySuccess(vehicle)
 										exports.pNotify:SendNotification({text = 'از خرید شما سپاسگذاریم.', type = "success", timeout = 3000})
+										TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 										AlreadyCalledMechanic = false
 									else
 										exports.pNotify:SendNotification({text = 'موجودی حساب شما کافی نیست.', type = "error", timeout = 3000})
 									end
 								end, DefaultCar.plate, true)
-							elseif data.current.value == 'cancel' then
-								ESX.Game.SetVehicleProperties(vehicle, NoChangeCar)
+							elseif data.current.value == 'finishCar' then
 								FreezeEntityPosition(vehicle, false)
-								TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+								ESX.Game.SetVehicleProperties(vehicle, DefaultCarArray[DefaultCar.plate])
+								TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 								DefaultCar = nil
-								NoChangeCar = nil
 								menu.close()
 								AlreadyCalledMechanic = false
 							end
@@ -1365,14 +1505,14 @@ AddEventHandler('master_keymap:u', function()
 							menu.close()
 						end)
 					else
-						TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, false)
+						TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 						AlreadyCalledMechanic = false
 						FreezeEntityPosition(vehicle, false)
 						DefaultCar = nil
 					end
 				end, DefaultCar.plate)
 			end
-		end, DefaultCar)
+		end, tmpCar, false)
 	end
 end)
 
