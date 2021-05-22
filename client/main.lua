@@ -258,8 +258,8 @@ function startSelfCustom()
 											end
 										end, DefaultCar.plate, true)
 									elseif data.current.value == 'finishCar' then
-										FreezeEntityPosition(vehicle, false)
 										ESX.Game.SetVehicleProperties(vehicle, DefaultCarArray[DefaultCar.plate])
+										FreezeEntityPosition(vehicle, false)
 										TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 										DefaultCar = nil
 										menu.close()
@@ -1494,8 +1494,8 @@ AddEventHandler('master_keymap:u', function()
 									end
 								end, DefaultCar.plate, true)
 							elseif data.current.value == 'finishCar' then
-								FreezeEntityPosition(vehicle, false)
 								ESX.Game.SetVehicleProperties(vehicle, DefaultCarArray[DefaultCar.plate])
+								FreezeEntityPosition(vehicle, false)
 								TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 								DefaultCar = nil
 								menu.close()

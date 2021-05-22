@@ -226,9 +226,9 @@ AddEventHandler('master_mechanicjob:FinishCustom', function(isSelf)
 		return
 	end]]--
 	
-	if Mechanics[_Source] then
-		local ThisCar = Mechanics[_Source]
-		IsPlayerReq[ThisCar].customer = _Source
+	if Mechanics[xPlayer.identifier] then
+		local ThisCar = Mechanics[xPlayer.identifier]
+		IsPlayerReq[ThisCar].customer = xPlayer.identifier
 		IsPlayerReq[ThisCar].incustom = false
 		TriggerClientEvent('master_mechanicjob:CloseMenus', _Source)
 		--TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[ThisCar].source)
@@ -239,7 +239,7 @@ AddEventHandler('master_mechanicjob:FinishCustom', function(isSelf)
 			TriggerClientEvent("pNotify:SendNotification", IsPlayerReq[ThisCar].source, { text = 'ارتقا خودرو شما به پایان رسید.', type = "success", timeout = 6000, layout = "bottomCenter"})
 			TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'ارتقا خودرو به پایان رسید، کل مبلغ: ' .. IsPlayerReq[ThisCar].price .. '$', type = "success", timeout = 12000, layout = "bottomCenter"})
 		end
-		Mechanics[_Source] = nil
+		Mechanics[xPlayer.identifier] = nil
 	else
 		if isSelf == false then
 			TriggerClientEvent("pNotify:SendNotification", _Source, { text = 'شما درخواست ارتقایی نداشتید.', type = "error", timeout = 3000, layout = "bottomCenter"})
@@ -318,14 +318,14 @@ ESX.RegisterServerCallback('master_mechanicjob:check_car', function(source, cb, 
 		if result[1] then
 			if IsPlayerReq[plate] then
 				if IsPlayerReq[plate].customer == 0 or IsPlayerReq[plate].customer == source then
-					if Mechanics[_source] and Mechanics[_source] ~= plate then
+					if Mechanics[xPlayer.identifier] and Mechanics[xPlayer.identifier] ~= plate then
 						TriggerClientEvent("pNotify:SendNotification", _source, { text = 'شما در حال ارتقا خودرو می باشید.', type = "error", timeout = 3000, layout = "bottomCenter"})
 						return
 					end
 					cb(true, result[1])
 					IsPlayerReq[plate].customer = _source
 					IsPlayerReq[plate].incustom = true
-					Mechanics[_source] = plate
+					Mechanics[xPlayer.identifier] = plate
 					if IsPlayerReq[plate].source ~= _source then
 						TriggerClientEvent('master_mechanicjob:CloseMenus', IsPlayerReq[plate].source)
 					end
