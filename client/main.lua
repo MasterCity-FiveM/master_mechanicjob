@@ -121,10 +121,17 @@ Citizen.CreateThread(function()
 
 			if distance < Config.DrawDistance then
 				DrawMarker(20, Config.Zones.SelfCustom, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
+				DrawMarker(20, Config.Zones.SelfRepair, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, Config.MarkerColor.r, Config.MarkerColor.g, Config.MarkerColor.b, 100, false, true, 2, true, false, false, false)
 				letSleep = false
 
 				if distance < 5 then
 					isInMarker, currentPart = true, 'SelfCustom'
+				end
+				
+				local distance2 = #(playerCoords - Config.Zones.SelfRepair)
+				
+				if distance2 < 5 then
+					isInMarker, currentPart = true, 'SelfRepair'
 				end
 				
 				if isInMarker and not HasAlreadyEnteredMarker or (isInMarker and LastPart ~= currentPart) then
@@ -190,6 +197,18 @@ AddEventHandler('master_keymap:e', function()
 		CurrentAction = nil
 	elseif CurrentAction and CurrentAction == 'menu_selfcustom' then
 		startSelfCustom()
+	elseif CurrentAction and CurrentAction == 'menu_selfRepair' then
+		local ped = GetPlayerPed(-1)
+		if (IsPedSittingInAnyVehicle(ped)) then
+            local vehicle = GetVehiclePedIsIn(ped, false)
+			if (GetPedInVehicleSeat(vehicle, -1) == ped) then
+				TriggerServerEvent('master_mechanicjob:repaircar')
+			else
+				exports.pNotify:SendNotification({text = "شما باید پشت فرمون باشید!", type = "error", timeout = 3000})
+			end
+		else
+			exports.pNotify:SendNotification({text = "شما باید پشت فرمون باشید!", type = "error", timeout = 3000})
+		end
 	end
 end)
 
@@ -284,6 +303,24 @@ function startSelfCustom()
 	end
 end
 
+RegisterNetEvent('master_mechanicjob:repaircar')
+AddEventHandler('master_mechanicjob:repaircar', function()
+	local ped = GetPlayerPed(-1)
+	if (IsPedSittingInAnyVehicle(ped)) then
+		local vehicle = GetVehiclePedIsIn(ped, false)
+		if (GetPedInVehicleSeat(vehicle, -1) == ped) then
+			SetVehicleFixed(vehicle)
+			SetVehicleDeformationFixed(vehicle)
+			SetVehicleUndriveable(vehicle, false)
+			SetVehicleEngineOn(vehicle, true, true)
+			exports.pNotify:SendNotification({text = "خودرو شما تعمیر شد!", type = "success", timeout = 3000})
+		else
+			exports.pNotify:SendNotification({text = "شما باید پشت فرمون باشید!", type = "error", timeout = 3000})
+		end
+	else
+		exports.pNotify:SendNotification({text = "شما باید پشت فرمون باشید!", type = "error", timeout = 3000})
+	end
+end)
 RegisterNetEvent('master_keymap:f6')
 AddEventHandler('master_keymap:f6', function()
 	ESX.UI.Menu.CloseAll()
@@ -794,6 +831,10 @@ AddEventHandler('master_mechanicjob:hasEnteredMarker', function(part)
 		CurrentAction     = 'menu_selfcustom'
 		CurrentActionMsg  = 'در صورتی که مکانیک نیست، E بزنید تا خودتان ماشین را شخصی سازی کنید.'
 		CurrentActionData = {}
+	elseif part == 'SelfRepair' then
+		CurrentAction     = 'menu_selfRepair'
+		CurrentActionMsg  = 'جهت تعمیر خودرو E بزنید. 100$'
+		CurrentActionData = {}
 	end
 	
 	if CurrentActionMsg ~= nil then
@@ -1048,11 +1089,6 @@ AddEventHandler('master_mechanicjob:DontInstallMod', function()
 	oldCar = nil
 end)
 
-RegisterNetEvent('master_mechanicjob:cancelInstallMod')
-AddEventHandler('master_mechanicjob:cancelInstallMod', function(vehicle)
-	ESX.Game.SetVehicleProperties(vehicle, myCar)
-end)
-
 RegisterNetEvent('master_mechanicjob:CloseMenus')
 AddEventHandler('master_mechanicjob:CloseMenus', function()
 	ESX.UI.Menu.CloseAll()
@@ -1119,18 +1155,15 @@ function OpenLSMenu(elems, menuName, menuTitle, parent, vehicle)
 		end
 	end, function(data, menu) -- on cancel
 		menu.close()
+		ESX.Game.SetVehicleProperties(vehicle, myCar)
 		lsMenuIsShowed = false
-		TriggerEvent('master_mechanicjob:cancelInstallMod', vehicle)
 		SetVehicleDoorsShut(vehicle, false)
 		if parent == nil  then
 			myCar = {}
 		end
 	end, function(data, menu) -- on change
+		ESX.Game.SetVehicleProperties(vehicle, myCar)
 		UpdateMods(data.current, vehicle)
-	end, function()
-		lsMenuIsShowed = false
-		TriggerEvent('master_mechanicjob:cancelInstallMod', vehicle)
-		SetVehicleDoorsShut(vehicle, false)
 	end)
 end
 
@@ -1377,7 +1410,7 @@ function CustomizeCar()
 	end
 	
 	if globlalvehicle then
-		local myCar = ESX.Game.GetVehicleProperties(globlalvehicle)
+		myCar = ESX.Game.GetVehicleProperties(globlalvehicle)
 		
 		ESX.TriggerServerCallback('master_mechanicjob:check_car', function(status, data)
 			if status == true then
@@ -1505,6 +1538,7 @@ AddEventHandler('master_keymap:u', function()
 							menu.close()
 						end)
 					else
+						ESX.Game.SetVehicleProperties(vehicle, DefaultCarArray[DefaultCar.plate])
 						TriggerServerEvent('master_mechanicjob:VehiclesInWatingList', DefaultCar.plate ,DefaultCar, true)
 						AlreadyCalledMechanic = false
 						FreezeEntityPosition(vehicle, false)

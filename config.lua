@@ -24,7 +24,8 @@ Config.Zones = {
 	Cloakroom = vector3(-311.2484, -137.222, 39.0022),
 	ItemInventory = vector3(-344.7033, -125.0242, 39.0022),
 	CarSpawn = vector3(-360.1187, -122.5055, 38.68201),
-	SelfCustom =  vector3(-330.6066, -137.4989, 38.6822),
+	SelfCustom = vector3(-330.6066, -137.4989, 38.6822),
+	SelfRepair = vector3(-325.3187, -113.6044, 39.0022),
 	
 	CustomLocations = {
 			vector3(-338.38, -136.36, 39.01),
