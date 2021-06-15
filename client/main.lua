@@ -2,7 +2,7 @@ ESX = nil
 local HasAlreadyEnteredMarker = false
 local CurrentAction, CurrentActionMsg, CurrentActionData = nil, '', {}
 local isDead, isBusy = false, false
-local myCar, CarBeforeChanges, blipInServices = {}, {}, {}
+local myCar, CarBeforeChanges = {}, {}
 local totalPrice = 0
 local isInMarker, hasExited, letSleep = false, false, true
 local currentStation, currentPart, currentPartNum
@@ -721,7 +721,6 @@ function OpenCloakroomMenu()
 					TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
 
 					TriggerServerEvent('esx_service:disableService', ESX.PlayerData.job.name)
-					TriggerEvent('master_mechanicjob:updateBlip')
 					exports.pNotify:SendNotification({text = _U('service_out'), type = "info", timeout = 3000})
 				end
 			end, ESX.PlayerData.job.name)
@@ -748,7 +747,6 @@ function OpenCloakroomMenu()
 							}
 
 							TriggerServerEvent('esx_service:notifyAllInService', notification, ESX.PlayerData.job.name)
-							TriggerEvent('master_mechanicjob:updateBlip')
 							exports.pNotify:SendNotification({text = _U('service_in'), type = "info", timeout = 3000})
 						end
 					end, ESX.PlayerData.job.name)
@@ -866,69 +864,6 @@ end)
 AddEventHandler('esx:onPlayerDeath', function(data) isDead = true end)
 AddEventHandler('esx:onPlayerSpawn', function(spawn) isDead = false end)
 AddEventHandler('playerSpawned', function() isDead = false end)
-
-Citizen.CreateThread(function()
-	while true do
-		Citizen.Wait(60000)
-		TriggerEvent('master_mechanicjob:updateBlip')
-	end
-end)
-
-RegisterNetEvent('master_mechanicjob:updateBlip')
-AddEventHandler('master_mechanicjob:updateBlip', function()
-
-	-- Refresh all blips
-	for k, existingBlip in pairs(blipInServices) do
-		RemoveBlip(existingBlip)
-	end
-
-	-- Clean the blip table
-	blipInServices = {}
-
-	if not playerInService then
-		return
-	end
-	
-	while ESX == nil do
-		Citizen.Wait(0)
-	end
-	
-	while ESX.GetPlayerData().job == nil do
-		Citizen.Wait(6000)
-	end
-
-	ESX.PlayerData = ESX.GetPlayerData()
-
-	if ESX.PlayerData.job and (ESX.PlayerData.job.name == 'mechanic') then
-		ESX.TriggerServerCallback('esx_service:getInServOnlinePlayers', function(players)
-			for i=1, #players, 1 do
-				if players[i].job.name == ESX.PlayerData.job.name then
-					local id = GetPlayerFromServerId(players[i].source)
-					if NetworkIsPlayerActive(id) and GetPlayerPed(id) ~= PlayerPedId() then
-						createBlip(id)
-					end
-				end
-			end
-		end, ESX.PlayerData.job.name)
-	end
-end)
-
-function createBlip(id)
-	local ped = GetPlayerPed(id)
-	local blip = GetBlipFromEntity(ped)
-
-	if not DoesBlipExist(blip) then -- Add blip and create head display on player
-		blip = AddBlipForEntity(ped)
-		SetBlipSprite(blip, 1)
-		ShowHeadingIndicatorOnBlip(blip, true) -- Player Blip indicator
-		SetBlipRotation(blip, math.ceil(GetEntityHeading(ped))) -- update rotation
-		SetBlipNameToPlayerName(blip, id) -- update blip name
-		SetBlipScale(blip, 0.7) -- set scale
-		SetBlipAsShortRange(blip, true)
-
-		table.insert(blipInServices, blip) -- add blip to array so we can remove it later
-	end
-end
 
 function OpenVehicleSpawnerMenu()
 	local playerCoords = GetEntityCoords(PlayerPedId())

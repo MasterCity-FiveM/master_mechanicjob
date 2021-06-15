@@ -10,7 +10,7 @@ while ESX == nil do
 	Citizen.Wait(1)
 end
 
-TriggerEvent('esx_service:activateService', 'mechanic', Config.MaxInService)
+TriggerEvent('esx_service:activateService', 'mechanic', 500)
 
 
 TriggerEvent('esx_phone:registerNumber', 'mechanic', _U('mechanic_customer'), true, true)

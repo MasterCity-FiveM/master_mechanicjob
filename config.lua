@@ -21,7 +21,7 @@ Config.Zones = {
 	},
 	CustomCarLocation = {x = -320.2418, y = -131.4593, z = 38.96851},
 	--BossAction = {x = -346.8396, y = -128.0967, z = 39.0022},
-	Cloakroom = vector3(-311.2484, -137.222, 39.0022),
+	Cloakroom = vector3(-311.2484, -137.222, 39.2022),
 	ItemInventory = vector3(-344.7033, -125.0242, 39.0022),
 	CarSpawn = vector3(-360.1187, -122.5055, 38.68201),
 	SelfCustom = vector3(-330.6066, -137.4989, 38.6822),
